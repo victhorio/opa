@@ -1,0 +1,76 @@
+package openai
+
+import "github.com/victhorio/opa/agg/com"
+
+type tool struct {
+	Type        string     `json:"type"` // always "function"
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Parameters  toolParams `json:"parameters"`
+	Strict      bool       `json:"strict"`
+}
+
+type toolParams struct {
+	Type                 com.JSType           `json:"type"` // always "object"
+	Properties           map[string]paramProp `json:"properties,omitempty"`
+	Required             []string             `json:"required,omitempty"`
+	AdditionalProperties *bool                `json:"additionalProperties,omitempty"`
+}
+
+type paramProp struct {
+	Type        com.JSType `json:"type,omitempty"`
+	Description string     `json:"description,omitempty"`
+
+	// structural
+	Items                *paramProp `json:"items,omitempty"`
+	AdditionalProperties *bool      `json:"additionalProperties,omitempty"`
+
+	// validation / constraints
+	Enum     []string `json:"enum,omitempty"`
+	Nullable *bool    `json:"nullable,omitempty"`
+}
+
+func adaptTools(tools []com.Tool) []tool {
+	adapted := make([]tool, 0, len(tools))
+	for _, tool := range tools {
+		adapted = append(adapted, adaptTool(tool))
+	}
+	return adapted
+}
+
+func adaptTool(x com.Tool) tool {
+	r := tool{
+		Type:        "function",
+		Name:        x.Name,
+		Description: x.Desc,
+		Parameters: toolParams{
+			Type:                 "object",
+			Properties:           make(map[string]paramProp),
+			Required:             make([]string, 0),
+			AdditionalProperties: boolPtr(false),
+		},
+		Strict: true,
+	}
+
+	for paramName, param := range x.Params {
+		r.Parameters.Required = append(r.Parameters.Required, paramName)
+
+		var items *paramProp
+		if param.Items != nil {
+			items = &paramProp{
+				Type: param.Items.Type,
+				Enum: param.Items.Enum,
+			}
+		}
+
+		r.Parameters.Properties[paramName] = paramProp{
+			Type:        param.Type,
+			Description: param.Desc,
+			Nullable:    param.Nullable,
+			Items:       items,
+			Enum:        param.Enum,
+		}
+	}
+
+	return r
+}
