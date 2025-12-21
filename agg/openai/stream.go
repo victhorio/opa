@@ -15,8 +15,8 @@ import (
 )
 
 type Stream struct {
-	stream io.ReadCloser
-	model  string
+	stream  io.ReadCloser
+	modelID string
 }
 
 // OpenStream creates a new stream for the OpenAI API.
@@ -30,11 +30,11 @@ func (m *Model) OpenStream(
 ) (core.ResponseStream, error) {
 	payload := requestBody{
 		Include: []string{"reasoning.encrypted_content"},
-		Input:   fromComMessages(messages),
+		Input:   fromCoreMessages(messages),
 		Model:   m.model,
 		Store:   boolPtr(false),
 		Stream:  true,
-		Tools:   adaptTools(tools),
+		Tools:   fromCoreTools(tools),
 	}
 
 	if m.reasoningEffort != "" {
@@ -75,8 +75,8 @@ func (m *Model) OpenStream(
 	}
 
 	return &Stream{
-		stream: resp.Body,
-		model:  m.model,
+		stream:  resp.Body,
+		modelID: m.model,
 	}, nil
 }
 
@@ -172,7 +172,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 				Output:    r.Usage.Output,
 				Reasoning: r.Usage.OutputDetails.Reasoning,
 				Total:     r.Usage.Input + r.Usage.Output,
-				Cost:      costFromUsage(s.model, r.Usage),
+				Cost:      costFromUsage(s.modelID, r.Usage),
 			},
 			Messages: toComMessages(r.Output),
 		}
@@ -230,7 +230,7 @@ func toComMessages(output []item) []core.Message {
 	for _, item := range output {
 		switch item.Type {
 		case etfReasoning:
-			messages = append(messages, core.NewMessageReasoning(item.EncryptedContent))
+			messages = append(messages, core.NewMessageReasoning(item.EncryptedContent, ""))
 		case etfMessage:
 			if len(item.Content) != 1 {
 				panic(fmt.Errorf("expected 1 content item, got %d", len(item.Content)))

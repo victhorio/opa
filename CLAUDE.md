@@ -33,3 +33,5 @@ The goals are:
   - Tool JSON Schema definitions, Usage types, etc.
 - `agg/openai/*.go` - Implements the OpenAI provider via the responses endpoint. `NewModel()`
   returns a `core.Model` implementation. Main file is `stream.go`.
+- `agg/anthropic/*.go` - Implements the Anthropic provider via the messages endpoint. `NewModel()`
+  returns a `core.Model` implementation. Main file is `stream.go`.

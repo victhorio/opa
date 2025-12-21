@@ -73,7 +73,7 @@ func newMsgToolResult(callID, result string) msgToolResult {
 	}
 }
 
-func fromComMessages(messages []core.Message) []any {
+func fromCoreMessages(messages []core.Message) []any {
 	adapted := make([]any, 0, len(messages))
 	for _, message := range messages {
 		switch message.Type {

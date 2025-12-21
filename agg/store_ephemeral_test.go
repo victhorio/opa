@@ -22,7 +22,7 @@ func TestEphemeralStore(t *testing.T) {
 	// add things under key "k1"
 	msgs = []core.Message{
 		core.NewMessageContent("user", "Hello!"),
-		core.NewMessageReasoning("123456"),
+		core.NewMessageReasoning("123456", ""),
 		core.NewMessageToolCall("1", "fn", "{}"),
 		core.NewMessageToolResult("1", "ok"),
 	}

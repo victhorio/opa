@@ -24,10 +24,10 @@ type Message struct {
 	toolResult *ToolResult
 }
 
-func NewMessageReasoning(encrypted string) Message {
+func NewMessageReasoning(encrypted, text string) Message {
 	return Message{
 		Type:      MTReasoning,
-		reasoning: &Reasoning{Encrypted: encrypted},
+		reasoning: &Reasoning{Encrypted: encrypted, Text: text},
 	}
 }
 
@@ -56,44 +56,44 @@ func NewMessageToolResult(id, result string) Message {
 	}
 }
 
-func (m Message) Reasoning() (Reasoning, bool) {
+func (m *Message) Reasoning() (*Reasoning, bool) {
 	if m.Type != MTReasoning {
-		return Reasoning{}, false
+		return nil, false
 	}
 	if m.reasoning == nil {
 		panic("reasoning is nil, even though type is MTReasoning")
 	}
-	return *m.reasoning, true
+	return m.reasoning, true
 }
 
-func (m Message) Content() (Content, bool) {
+func (m *Message) Content() (*Content, bool) {
 	if m.Type != MTContent {
-		return Content{}, false
+		return nil, false
 	}
 	if m.content == nil {
 		panic("content is nil, even though type is MTContent")
 	}
-	return *m.content, true
+	return m.content, true
 }
 
-func (m Message) ToolCall() (ToolCall, bool) {
+func (m *Message) ToolCall() (*ToolCall, bool) {
 	if m.Type != MTToolCall {
-		return ToolCall{}, false
+		return nil, false
 	}
 	if m.toolCall == nil {
 		panic("tool call is nil, even though type is MTToolCall")
 	}
-	return *m.toolCall, true
+	return m.toolCall, true
 }
 
-func (m Message) ToolResult() (ToolResult, bool) {
+func (m *Message) ToolResult() (*ToolResult, bool) {
 	if m.Type != MTToolResult {
-		return ToolResult{}, false
+		return nil, false
 	}
 	if m.toolResult == nil {
 		panic("tool result is nil, even though type is MTToolResult")
 	}
-	return *m.toolResult, true
+	return m.toolResult, true
 }
 
 func (m Message) MarshalJSON() ([]byte, error) {
@@ -142,6 +142,7 @@ func (m Message) MarshalJSON() ([]byte, error) {
 
 type Reasoning struct {
 	Encrypted string
+	Text      string
 }
 
 type Content struct {

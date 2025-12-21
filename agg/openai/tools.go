@@ -11,7 +11,7 @@ type tool struct {
 }
 
 type toolParams struct {
-	Type                 core.JSType           `json:"type"` // always "object"
+	Type                 core.JSType          `json:"type"` // always "object"
 	Properties           map[string]paramProp `json:"properties,omitempty"`
 	Required             []string             `json:"required,omitempty"`
 	AdditionalProperties *bool                `json:"additionalProperties,omitempty"`
@@ -19,7 +19,7 @@ type toolParams struct {
 
 type paramProp struct {
 	Type        core.JSType `json:"type,omitempty"`
-	Description string     `json:"description,omitempty"`
+	Description string      `json:"description,omitempty"`
 
 	// structural
 	Items                *paramProp `json:"items,omitempty"`
@@ -30,15 +30,15 @@ type paramProp struct {
 	Nullable *bool    `json:"nullable,omitempty"`
 }
 
-func adaptTools(tools []core.Tool) []tool {
+func fromCoreTools(tools []core.Tool) []tool {
 	adapted := make([]tool, 0, len(tools))
 	for _, tool := range tools {
-		adapted = append(adapted, adaptTool(tool))
+		adapted = append(adapted, fromCoreTool(tool))
 	}
 	return adapted
 }
 
-func adaptTool(x core.Tool) tool {
+func fromCoreTool(x core.Tool) tool {
 	r := tool{
 		Type:        "function",
 		Name:        x.Name,

@@ -7,17 +7,17 @@ type Tool struct {
 }
 
 type ToolParam struct {
-	Type JSType
-	Desc string
+	Type JSType `json:"type"`
+	Desc string `json:"description"`
 
 	// we can tell that the type is nullable
-	Nullable *bool
+	Nullable *bool `json:"nullable,omitempty"`
 
 	// if Type == JSTArray, Items indicate the type of the items in the array
-	Items *ToolParam
+	Items *ToolParam `json:"items,omitempty"`
 
 	// if Type == JSTString it can optionally be an enumerator with specific values
-	Enum []string
+	Enum []string `json:"enum,omitempty"`
 }
 
 type ToolMap = map[string]func(string) (string, error)
