@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/victhorio/opa/agg/com"
+	"github.com/victhorio/opa/agg/core"
 )
 
 type Stream struct {
@@ -20,28 +20,26 @@ type Stream struct {
 }
 
 // OpenStream creates a new stream for the OpenAI API.
-// It sends a request to the OpenAI responses endpoing and returns an io.ReadCloser that can be
-// used to read the stream of events (by e.g. ReadStream).
-func OpenStream(
+// It sends a request to the OpenAI responses endpoint and returns a ResponseStream that can be
+// consumed for events.
+func (m *Model) OpenStream(
 	ctx context.Context,
 	client *http.Client,
-	messages []com.Message,
-	model string,
-	reasoningEffort string,
-	tools []com.Tool,
-) (*Stream, error) {
+	messages []core.Message,
+	tools []core.Tool,
+) (core.ResponseStream, error) {
 	payload := requestBody{
 		Include: []string{"reasoning.encrypted_content"},
 		Input:   fromComMessages(messages),
-		Model:   model,
+		Model:   m.model,
 		Store:   boolPtr(false),
 		Stream:  true,
 		Tools:   adaptTools(tools),
 	}
 
-	if reasoningEffort != "" {
+	if m.reasoningEffort != "" {
 		payload.Reasoning = &reasoningCfg{
-			Effort:  reasoningEffort,
+			Effort:  m.reasoningEffort,
 			Summary: "concise",
 		}
 	}
@@ -78,7 +76,7 @@ func OpenStream(
 
 	return &Stream{
 		stream: resp.Body,
-		model:  model,
+		model:  m.model,
 	}, nil
 }
 
@@ -90,7 +88,7 @@ func OpenStream(
 // - the final response object
 //
 // This function closes both the stream and the channel at the end of execution.
-func (s *Stream) Consume(ctx context.Context, out chan<- Event) {
+func (s *Stream) Consume(ctx context.Context, out chan<- core.Event) {
 	defer s.stream.Close()
 	defer close(out)
 
@@ -112,7 +110,7 @@ func (s *Stream) Consume(ctx context.Context, out chan<- Event) {
 				break
 			}
 
-			if !sendEvent(ctx, out, newEventError(err)) {
+			if !sendEvent(ctx, out, core.NewEvError(err)) {
 				return
 			}
 			continue
@@ -153,10 +151,10 @@ func (s *Stream) Consume(ctx context.Context, out chan<- Event) {
 	}
 }
 
-func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out chan<- Event) bool {
+func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out chan<- core.Event) bool {
 	var event eventRaw
 	if err := json.Unmarshal(dataBytes, &event); err != nil {
-		_ = sendEvent(ctx, out, newEventError(err))
+		_ = sendEvent(ctx, out, core.NewEvError(err))
 		return true
 	}
 
@@ -166,9 +164,9 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	case etRespCompleted:
 		// convert openai API response object into ag.types.Response object and emit
 		r := event.Response
-		responsePub := com.Response{
+		responsePub := core.Response{
 			Model: r.Model,
-			Usage: com.Usage{
+			Usage: core.Usage{
 				Input:     r.Usage.Input,
 				Cached:    r.Usage.InputDetails.Cached,
 				Output:    r.Usage.Output,
@@ -178,7 +176,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 			},
 			Messages: toComMessages(r.Output),
 		}
-		if !sendEvent(ctx, out, newEventResp(responsePub)) {
+		if !sendEvent(ctx, out, core.NewEvResp(responsePub)) {
 			return true
 		}
 		// stop listening for more events once we get response completed
@@ -186,7 +184,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	case etItemAdded:
 	case etItemDone:
 		if item := event.Item; item.Type == "function_call" {
-			if !sendEvent(ctx, out, newEventToolCall(com.ToolCall{
+			if !sendEvent(ctx, out, core.NewEvToolCall(core.ToolCall{
 				ID:        item.CallID,
 				Name:      item.Name,
 				Arguments: item.Arguments,
@@ -197,7 +195,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	case etContentAdded:
 	case etContentDone:
 	case etTextDelta:
-		if !sendEvent(ctx, out, newEventDelta(event.Delta)) {
+		if !sendEvent(ctx, out, core.NewEvDelta(event.Delta)) {
 			return true
 		}
 	case etTextDone:
@@ -212,12 +210,12 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 		//   for response, and I prefer to have them rendered in their entirety
 		// - further, etReasoningDeltaDone will always arrive before etReasoningDone, so no reason
 		//   to wait for that one
-		if !sendEvent(ctx, out, newEventDeltaReasoning(event.Text)) {
+		if !sendEvent(ctx, out, core.NewEvDeltaReason(event.Text)) {
 			return true
 		}
 	case etReasoningDone:
 	case etError:
-		_ = sendEvent(ctx, out, newEventError(fmt.Errorf("openai error: %s", string(dataBytes))))
+		_ = sendEvent(ctx, out, core.NewEvError(fmt.Errorf("openai error: %s", string(dataBytes))))
 		return true
 	default:
 		fmt.Printf("\033[31munknown event type:\033[0m %s\n\n%s\n\n", event.Type, string(dataBytes))
@@ -226,21 +224,21 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	return false
 }
 
-func toComMessages(output []item) []com.Message {
-	messages := make([]com.Message, 0, len(output))
+func toComMessages(output []item) []core.Message {
+	messages := make([]core.Message, 0, len(output))
 
 	for _, item := range output {
 		switch item.Type {
 		case etfReasoning:
-			messages = append(messages, com.NewMessageReasoning(item.EncryptedContent))
+			messages = append(messages, core.NewMessageReasoning(item.EncryptedContent))
 		case etfMessage:
 			if len(item.Content) != 1 {
 				panic(fmt.Errorf("expected 1 content item, got %d", len(item.Content)))
 			}
 
-			messages = append(messages, com.NewMessageContent(item.Role, item.Content[0].Text))
+			messages = append(messages, core.NewMessageContent(item.Role, item.Content[0].Text))
 		case etfFunctionCall:
-			messages = append(messages, com.NewMessageToolCall(item.CallID, item.Name, item.Arguments))
+			messages = append(messages, core.NewMessageToolCall(item.CallID, item.Name, item.Arguments))
 		default:
 			panic(fmt.Errorf("unknown item type: %s", item.Type))
 		}
@@ -249,7 +247,7 @@ func toComMessages(output []item) []com.Message {
 	return messages
 }
 
-func sendEvent(ctx context.Context, out chan<- Event, ev Event) bool {
+func sendEvent(ctx context.Context, out chan<- core.Event, ev core.Event) bool {
 	select {
 	case <-ctx.Done():
 		return false

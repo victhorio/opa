@@ -3,7 +3,7 @@ package agg
 import (
 	"testing"
 
-	"github.com/victhorio/opa/agg/com"
+	"github.com/victhorio/opa/agg/core"
 )
 
 func TestEphemeralStore(t *testing.T) {
@@ -20,14 +20,14 @@ func TestEphemeralStore(t *testing.T) {
 	}
 
 	// add things under key "k1"
-	msgs = []com.Message{
-		com.NewMessageContent("user", "Hello!"),
-		com.NewMessageReasoning("123456"),
-		com.NewMessageToolCall("1", "fn", "{}"),
-		com.NewMessageToolResult("1", "ok"),
+	msgs = []core.Message{
+		core.NewMessageContent("user", "Hello!"),
+		core.NewMessageReasoning("123456"),
+		core.NewMessageToolCall("1", "fn", "{}"),
+		core.NewMessageToolResult("1", "ok"),
 	}
 
-	usage = com.Usage{
+	usage = core.Usage{
 		Input:  1024,
 		Output: 256,
 		Total:  1024 + 256,
@@ -66,12 +66,12 @@ func TestEphemeralStore(t *testing.T) {
 
 	// let's add more messages and make sure extend works as intended
 
-	msgs = []com.Message{
-		com.NewMessageContent("assistant", "Ok!"),
-		com.NewMessageContent("user", "Can you repeat my name to me?"),
-		com.NewMessageContent("assistant", "Victhor"),
+	msgs = []core.Message{
+		core.NewMessageContent("assistant", "Ok!"),
+		core.NewMessageContent("user", "Can you repeat my name to me?"),
+		core.NewMessageContent("assistant", "Victhor"),
 	}
-	usage = com.Usage{
+	usage = core.Usage{
 		Input:  1280,
 		Cached: 1024,
 		Output: 64,
@@ -103,14 +103,14 @@ func TestEphemeralStore(t *testing.T) {
 	}
 
 	// make sure messages are in the correct order
-	expectedMsgTypes := []com.MessageType{
-		com.MTContent,
-		com.MTReasoning,
-		com.MTToolCall,
-		com.MTToolResult,
-		com.MTContent,
-		com.MTContent,
-		com.MTContent,
+	expectedMsgTypes := []core.MessageType{
+		core.MTContent,
+		core.MTReasoning,
+		core.MTToolCall,
+		core.MTToolResult,
+		core.MTContent,
+		core.MTContent,
+		core.MTContent,
 	}
 
 	for i, msg := range msgs {

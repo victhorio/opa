@@ -6,15 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/victhorio/opa/agg/com"
+	"github.com/victhorio/opa/agg/core"
 )
 
 type Tool struct {
 	Handler ToolHandler
-	Spec    com.Tool
+	Spec    core.Tool
 }
 
-func NewTool[T any](f ToolCallable[T], spec com.Tool) Tool {
+func NewTool[T any](f ToolCallable[T], spec core.Tool) Tool {
 	return Tool{
 		Handler: createHandler(f),
 		Spec:    spec,

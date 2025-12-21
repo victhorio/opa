@@ -1,4 +1,4 @@
-package com
+package core
 
 type Response struct {
 	Model    string

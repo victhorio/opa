@@ -1,6 +1,6 @@
 package openai
 
-import "github.com/victhorio/opa/agg/com"
+import "github.com/victhorio/opa/agg/core"
 
 type tool struct {
 	Type        string     `json:"type"` // always "function"
@@ -11,14 +11,14 @@ type tool struct {
 }
 
 type toolParams struct {
-	Type                 com.JSType           `json:"type"` // always "object"
+	Type                 core.JSType           `json:"type"` // always "object"
 	Properties           map[string]paramProp `json:"properties,omitempty"`
 	Required             []string             `json:"required,omitempty"`
 	AdditionalProperties *bool                `json:"additionalProperties,omitempty"`
 }
 
 type paramProp struct {
-	Type        com.JSType `json:"type,omitempty"`
+	Type        core.JSType `json:"type,omitempty"`
 	Description string     `json:"description,omitempty"`
 
 	// structural
@@ -30,7 +30,7 @@ type paramProp struct {
 	Nullable *bool    `json:"nullable,omitempty"`
 }
 
-func adaptTools(tools []com.Tool) []tool {
+func adaptTools(tools []core.Tool) []tool {
 	adapted := make([]tool, 0, len(tools))
 	for _, tool := range tools {
 		adapted = append(adapted, adaptTool(tool))
@@ -38,7 +38,7 @@ func adaptTools(tools []com.Tool) []tool {
 	return adapted
 }
 
-func adaptTool(x com.Tool) tool {
+func adaptTool(x core.Tool) tool {
 	r := tool{
 		Type:        "function",
 		Name:        x.Name,

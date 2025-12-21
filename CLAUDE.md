@@ -22,12 +22,14 @@ The goals are:
 
 ## Architecture
 
-- `./*.go` - Currenrtly is a simple CLI demo with interactive REPL.
-- `agg/*.go` - Defines a Store interface so it can handle conversation history, Tool abstractions
-  so that it can call tools at runtimes and the critical Agent struct definition, which contains
-  methods able to internally handle store/tools for agentic behavior.
-- `agg/com/*.go` - Defines common types used across modules. For example, Message abstractions for
-  the different types of messages (Text Messages, Tool Calls, Tool Results, Reasoning Blocks) as
-  well as Tool JSON Schema definition types, Usage types, etc.
-- `agg/openai/*.go` - Implements support for the OpenAI provider, using the responses endpoint. Main
-  file here is `stream.go`.
+- `./*.go` - Currently a simple CLI demo with interactive REPL.
+- `agg/*.go` - Defines a Store interface for conversation history, Tool abstractions for runtime
+  tool calls, and the Agent struct which orchestrates agentic behavior. The Agent is provider-
+  agnostic and depends on the `core.Model` interface rather than any specific provider.
+- `agg/core/*.go` - Defines shared types and interfaces used across modules:
+  - `Model` and `ResponseStream` interfaces for provider abstraction
+  - Message types (text, tool calls, tool results, reasoning)
+  - Event types for streaming responses
+  - Tool JSON Schema definitions, Usage types, etc.
+- `agg/openai/*.go` - Implements the OpenAI provider via the responses endpoint. `NewModel()`
+  returns a `core.Model` implementation. Main file is `stream.go`.

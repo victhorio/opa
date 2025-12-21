@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/victhorio/opa/agg/com"
+	"github.com/victhorio/opa/agg/core"
 )
 
 func TestSimpleMessage(t *testing.T) {
@@ -18,29 +18,30 @@ func TestSimpleMessage(t *testing.T) {
 	defer cancel()
 
 	client := &http.Client{}
-	ch := make(chan Event, 1)
+	ch := make(chan core.Event, 1)
 
-	msgs := []com.Message{
-		com.NewMessageContent("user", "What is the capital of France?"),
+	msgs := []core.Message{
+		core.NewMessageContent("user", "What is the capital of France?"),
 	}
 
-	stream, err := OpenStream(ctx, client, msgs, "gpt-5-mini", "low", []com.Tool{})
+	model := NewModel("gpt-5-mini", "low")
+	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
 
 	go stream.Consume(ctx, ch)
 
-	var r com.Response
+	var r core.Response
 	for event := range ch {
 		switch event.Type {
-		case ETDeltaReasoning:
+		case core.EvDeltaReason:
 			// ignore
-		case ETDelta:
+		case core.EvDelta:
 			// ignore
-		case ETToolCall:
+		case core.EvToolCall:
 			t.Fatalf("Unexpected tool call: %v", event.Call)
-		case ETResponse:
+		case core.EvResp:
 			r = event.Response
 		}
 	}
@@ -67,31 +68,32 @@ func TestMultiTurnMessages(t *testing.T) {
 	defer cancel()
 
 	client := &http.Client{}
-	ch := make(chan Event, 1)
+	ch := make(chan core.Event, 1)
 
-	msgs := make([]com.Message, 0, 4)
+	msgs := make([]core.Message, 0, 4)
 	msgs = append(
 		msgs,
-		com.NewMessageContent("user", "Hi! My name is Victhor, what is your name?"),
+		core.NewMessageContent("user", "Hi! My name is Victhor, what is your name?"),
 	)
 
-	firstStream, err := OpenStream(ctx, client, msgs, "gpt-5-mini", "low", []com.Tool{})
+	model := NewModel("gpt-5-mini", "low")
+	firstStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
 
 	go firstStream.Consume(ctx, ch)
 
-	var r com.Response
+	var r core.Response
 	for event := range ch {
 		switch event.Type {
-		case ETDeltaReasoning:
+		case core.EvDeltaReason:
 			// ignore
-		case ETDelta:
+		case core.EvDelta:
 			// ignore
-		case ETToolCall:
+		case core.EvToolCall:
 			t.Fatalf("Unexpected tool call: %v", event.Call)
-		case ETResponse:
+		case core.EvResp:
 			r = event.Response
 		}
 	}
@@ -101,26 +103,26 @@ func TestMultiTurnMessages(t *testing.T) {
 	}
 
 	msgs = append(msgs, r.Messages...)
-	msgs = append(msgs, com.NewMessageContent("user", "Can you repeat my name to me?"))
+	msgs = append(msgs, core.NewMessageContent("user", "Can you repeat my name to me?"))
 
-	ch = make(chan Event, 1)
-	secondStream, err := OpenStream(ctx, client, msgs, "gpt-5-mini", "low", []com.Tool{})
+	ch = make(chan core.Event, 1)
+	secondStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
 
 	go secondStream.Consume(ctx, ch)
 
-	var r2 com.Response
+	var r2 core.Response
 	for event := range ch {
 		switch event.Type {
-		case ETDeltaReasoning:
+		case core.EvDeltaReason:
 			// ignore
-		case ETDelta:
+		case core.EvDelta:
 			// ignore
-		case ETToolCall:
+		case core.EvToolCall:
 			t.Fatalf("Unexpected tool call: %v", event.Call)
-		case ETResponse:
+		case core.EvResp:
 			r2 = event.Response
 		}
 	}
@@ -147,20 +149,14 @@ func TestToolCall(t *testing.T) {
 	defer cancel()
 
 	client := &http.Client{}
-	ch := make(chan Event, 1)
+	ch := make(chan core.Event, 1)
 
-	msgs := []com.Message{
-		com.NewMessageContent("user", "What is the weather in Tokyo? In Celsius"),
+	msgs := []core.Message{
+		core.NewMessageContent("user", "What is the weather in Tokyo? In Celsius"),
 	}
 
-	stream, err := OpenStream(
-		ctx,
-		client,
-		msgs,
-		"gpt-5-mini",
-		"low",
-		[]com.Tool{getWeatherTool},
-	)
+	model := NewModel("gpt-5-mini", "low")
+	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
@@ -168,22 +164,22 @@ func TestToolCall(t *testing.T) {
 	go stream.Consume(ctx, ch)
 
 	var tc_count int
-	var tc com.ToolCall
-	var r com.Response
+	var tc core.ToolCall
+	var r core.Response
 	for event := range ch {
 		switch event.Type {
-		case ETDeltaReasoning:
+		case core.EvDeltaReason:
 			// ignore
-		case ETDelta:
+		case core.EvDelta:
 			// ignore
-		case ETToolCall:
+		case core.EvToolCall:
 			tc_count++
 			if tc_count > 1 {
 				t.Fatalf("Expected only one tool call, got %d", tc_count)
 			}
 
 			tc = event.Call
-		case ETResponse:
+		case core.EvResp:
 			r = event.Response
 		}
 	}
@@ -237,32 +233,33 @@ func TestToolResult(t *testing.T) {
 	defer cancel()
 
 	client := &http.Client{}
-	ch := make(chan Event, 1)
+	ch := make(chan core.Event, 1)
 
 	// mock that we asked for the weather in rio and it generated a tool call for it already
-	msgs := []com.Message{
-		com.NewMessageContent("user", "What is the weather in Rio?"),
-		com.NewMessageToolCall("123", "getWeather", `{"location": "Rio", "units": "Celsius"}`),
-		com.NewMessageToolResult("123", `{"temperature": 25, "description": "Sunny"}`),
+	msgs := []core.Message{
+		core.NewMessageContent("user", "What is the weather in Rio?"),
+		core.NewMessageToolCall("123", "getWeather", `{"location": "Rio", "units": "Celsius"}`),
+		core.NewMessageToolResult("123", `{"temperature": 25, "description": "Sunny"}`),
 	}
 
-	stream, err := OpenStream(ctx, client, msgs, "gpt-5-mini", "low", []com.Tool{getWeatherTool})
+	model := NewModel("gpt-5-mini", "low")
+	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
 
 	go stream.Consume(ctx, ch)
 
-	var r com.Response
+	var r core.Response
 	for event := range ch {
 		switch event.Type {
-		case ETDeltaReasoning:
+		case core.EvDeltaReason:
 			// ignore
-		case ETDelta:
+		case core.EvDelta:
 			// ignore
-		case ETToolCall:
+		case core.EvToolCall:
 			t.Fatalf("Unexpected tool call: %v", event.Call)
-		case ETResponse:
+		case core.EvResp:
 			r = event.Response
 		}
 	}
@@ -282,16 +279,16 @@ func TestToolResult(t *testing.T) {
 	}
 }
 
-var getWeatherTool = com.Tool{
+var getWeatherTool = core.Tool{
 	Name: "getWeather",
 	Desc: "Get the weather for a given location",
-	Params: map[string]com.ToolParam{
+	Params: map[string]core.ToolParam{
 		"location": {
-			Type: com.JSTString,
+			Type: core.JSTString,
 			Desc: "The location to get the weather for",
 		},
 		"units": {
-			Type: com.JSTString,
+			Type: core.JSTString,
 			Desc: "The units to use for the weather",
 			Enum: []string{"Celsius", "Fahrenheit"},
 		},

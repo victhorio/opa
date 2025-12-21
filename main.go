@@ -10,16 +10,17 @@ import (
 	"strings"
 
 	"github.com/victhorio/opa/agg"
-	"github.com/victhorio/opa/agg/com"
+	"github.com/victhorio/opa/agg/core"
+	"github.com/victhorio/opa/agg/openai"
 )
 
 func main() {
-	clickButtonSpec := com.Tool{
+	clickButtonSpec := core.Tool{
 		Name: "clickButton",
 		Desc: "Call this tool when the user asks you to click a button",
-		Params: map[string]com.ToolParam{
+		Params: map[string]core.ToolParam{
 			"index": {
-				Type: com.JSTNumber,
+				Type: core.JSTNumber,
 				Desc: "The index of the button to click (0-based)",
 			},
 		},
@@ -32,10 +33,10 @@ func main() {
 	clickButtonTool := agg.NewTool(clickButtonFunc, clickButtonSpec)
 
 	store := agg.NewEphemeralStore()
+	model := openai.NewModel("gpt-5.1", "low")
 	agent := agg.NewAgent(
 		"You are a helpful assistant.",
-		"gpt-5.1",
-		"low",
+		model,
 		&store,
 		[]agg.Tool{clickButtonTool},
 	)

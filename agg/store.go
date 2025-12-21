@@ -1,9 +1,9 @@
 package agg
 
-import "github.com/victhorio/opa/agg/com"
+import "github.com/victhorio/opa/agg/core"
 
 type Store interface {
-	Messages(string) []com.Message
-	Usage(string) com.Usage
-	Extend(string, []com.Message, com.Usage) error
+	Messages(string) []core.Message
+	Usage(string) core.Usage
+	Extend(string, []core.Message, core.Usage) error
 }

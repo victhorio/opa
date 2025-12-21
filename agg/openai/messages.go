@@ -3,7 +3,7 @@ package openai
 import (
 	"fmt"
 
-	"github.com/victhorio/opa/agg/com"
+	"github.com/victhorio/opa/agg/core"
 )
 
 type msgReasoning struct {
@@ -73,29 +73,29 @@ func newMsgToolResult(callID, result string) msgToolResult {
 	}
 }
 
-func fromComMessages(messages []com.Message) []any {
+func fromComMessages(messages []core.Message) []any {
 	adapted := make([]any, 0, len(messages))
 	for _, message := range messages {
 		switch message.Type {
-		case com.MTReasoning:
+		case core.MTReasoning:
 			reasoning, _ := message.Reasoning()
 			adapted = append(
 				adapted,
 				newMsgReasoning(reasoning.Encrypted),
 			)
-		case com.MTContent:
+		case core.MTContent:
 			content, _ := message.Content()
 			adapted = append(
 				adapted,
 				newMsgContent(content.Role, content.Text),
 			)
-		case com.MTToolCall:
+		case core.MTToolCall:
 			toolCall, _ := message.ToolCall()
 			adapted = append(
 				adapted,
 				newMsgToolCall(toolCall.ID, toolCall.Name, toolCall.Arguments),
 			)
-		case com.MTToolResult:
+		case core.MTToolResult:
 			toolResult, _ := message.ToolResult()
 			adapted = append(
 				adapted,
