@@ -16,7 +16,7 @@ import (
 
 type Stream struct {
 	stream  io.ReadCloser
-	modelID string
+	modelID ModelID
 }
 
 // OpenStream creates a new stream for the OpenAI API.
@@ -80,7 +80,7 @@ func (m *Model) OpenStream(
 	}, nil
 }
 
-// ConsumeStream reads the stream of events from the OpenAI API and emits them to the output channel.
+// Consume reads the stream of events from the OpenAI API and emits them to the output channel.
 // It reads the stream, emitting events through the channel for:
 // - completed tool calls
 // - reasoning deltas (complete sentences)
@@ -259,9 +259,9 @@ func sendEvent(ctx context.Context, out chan<- core.Event, ev core.Event) bool {
 // requestBody is the body of the request to the OpenAI responses endpoint.
 type requestBody struct {
 	Include           []string      `json:"include,omitempty"`
-	Input             []any         `json:"input"`
+	Input             []msg         `json:"input"`
 	MaxOutputTokens   int           `json:"max_output_tokens,omitempty"`
-	Model             string        `json:"model,omitempty"`
+	Model             ModelID       `json:"model,omitempty"`
 	ParallelToolCalls *bool         `json:"parallel_tool_calls,omitempty"`
 	Reasoning         *reasoningCfg `json:"reasoning,omitempty"`
 	Store             *bool         `json:"store,omitempty"`
@@ -269,10 +269,171 @@ type requestBody struct {
 	Temperature       float64       `json:"temperature,omitempty"`
 	Tools             []tool        `json:"tools,omitempty"`
 }
+
 type reasoningCfg struct {
 	Effort  string `json:"effort,omitempty"`
 	Summary string `json:"summary,omitempty"`
 }
+
+// Message types for OpenAI API requests
+
+type msgType string
+
+const (
+	msgTypeReasoning  msgType = "reasoning"
+	msgTypeContent    msgType = "message"
+	msgTypeToolCall   msgType = "function_call"
+	msgTypeToolResult msgType = "function_call_output"
+)
+
+type msg struct {
+	Type msgType `json:"type"`
+	// reasoning fields
+	Encrypted string    `json:"encrypted_content,omitempty"`
+	Summary   *[]string `json:"summary,omitempty"`
+	// content fields
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+	// tool call fields
+	CallID    string `json:"call_id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+	// tool result fields
+	Output string `json:"output,omitempty"`
+}
+
+func newMsgReasoning(encrypted string) msg {
+	return msg{
+		Type:      msgTypeReasoning,
+		Encrypted: encrypted,
+		Summary:   &[]string{},
+	}
+}
+
+func newMsgContent(role, content string) msg {
+	return msg{
+		Type:    msgTypeContent,
+		Role:    role,
+		Content: content,
+	}
+}
+
+func newMsgToolCall(callID, name, arguments string) msg {
+	return msg{
+		Type:      msgTypeToolCall,
+		CallID:    callID,
+		Name:      name,
+		Arguments: arguments,
+	}
+}
+
+func newMsgToolResult(callID, result string) msg {
+	return msg{
+		Type:   msgTypeToolResult,
+		CallID: callID,
+		Output: result,
+	}
+}
+
+func fromCoreMessages(messages []core.Message) []msg {
+	adapted := make([]msg, 0, len(messages))
+	for _, message := range messages {
+		switch message.Type {
+		case core.MTReasoning:
+			reasoning, _ := message.Reasoning()
+			adapted = append(adapted, newMsgReasoning(reasoning.Encrypted))
+		case core.MTContent:
+			content, _ := message.Content()
+			adapted = append(adapted, newMsgContent(content.Role, content.Text))
+		case core.MTToolCall:
+			toolCall, _ := message.ToolCall()
+			adapted = append(adapted, newMsgToolCall(toolCall.ID, toolCall.Name, toolCall.Arguments))
+		case core.MTToolResult:
+			toolResult, _ := message.ToolResult()
+			adapted = append(adapted, newMsgToolResult(toolResult.ID, toolResult.Result))
+		default:
+			panic(fmt.Errorf("unknown message type: %d", message.Type))
+		}
+	}
+	return adapted
+}
+
+// Tool types for OpenAI API requests
+
+type tool struct {
+	Type        string     `json:"type"` // always "function"
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Parameters  toolParams `json:"parameters"`
+	Strict      bool       `json:"strict"`
+}
+
+type toolParams struct {
+	Type                 core.JSType          `json:"type"` // always "object"
+	Properties           map[string]paramProp `json:"properties,omitempty"`
+	Required             []string             `json:"required,omitempty"`
+	AdditionalProperties *bool                `json:"additionalProperties,omitempty"`
+}
+
+type paramProp struct {
+	Type        core.JSType `json:"type,omitempty"`
+	Description string      `json:"description,omitempty"`
+
+	// structural
+	Items                *paramProp `json:"items,omitempty"`
+	AdditionalProperties *bool      `json:"additionalProperties,omitempty"`
+
+	// validation / constraints
+	Enum     []string `json:"enum,omitempty"`
+	Nullable *bool    `json:"nullable,omitempty"`
+}
+
+func fromCoreTools(tools []core.Tool) []tool {
+	adapted := make([]tool, 0, len(tools))
+	for _, tool := range tools {
+		adapted = append(adapted, fromCoreTool(tool))
+	}
+	return adapted
+}
+
+func fromCoreTool(x core.Tool) tool {
+	r := tool{
+		Type:        "function",
+		Name:        x.Name,
+		Description: x.Desc,
+		Parameters: toolParams{
+			Type:                 "object",
+			Properties:           make(map[string]paramProp),
+			Required:             make([]string, 0),
+			AdditionalProperties: boolPtr(false),
+		},
+		Strict: true,
+	}
+
+	for paramName, param := range x.Params {
+		r.Parameters.Required = append(r.Parameters.Required, paramName)
+
+		var items *paramProp
+		if param.Items != nil {
+			items = &paramProp{
+				Type: param.Items.Type,
+				Enum: param.Items.Enum,
+			}
+		}
+
+		r.Parameters.Properties[paramName] = paramProp{
+			Type:        param.Type,
+			Description: param.Desc,
+			Nullable:    param.Nullable,
+			Items:       items,
+			Enum:        param.Enum,
+		}
+	}
+
+	return r
+}
+
+// Response and SSE types from OpenAI API
 
 // eventRaw is the raw event from the OpenAI API.
 type eventRaw struct {
@@ -283,7 +444,7 @@ type eventRaw struct {
 	Text     string   `json:"text"`
 }
 
-// represents the complete response
+// response represents the complete response
 type response struct {
 	Model  string `json:"model"`
 	Output []item `json:"output"`
@@ -318,7 +479,7 @@ type usage struct {
 	} `json:"output_tokens_details"`
 }
 
-// event types from the OpenAI API
+// Event types from the OpenAI API
 const (
 	etRespCreated        = "response.created"
 	etRespProgress       = "response.in_progress"
@@ -338,7 +499,7 @@ const (
 	etError              = "error"
 )
 
-// event type field values from the OpenAI API
+// Event type field values from the OpenAI API
 const (
 	etfReasoning    = "reasoning"
 	etfMessage      = "message"

@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/victhorio/opa/agg"
-	"github.com/victhorio/opa/agg/anthropic"
 	"github.com/victhorio/opa/agg/core"
+	"github.com/victhorio/opa/agg/openai"
 )
 
 func main() {
@@ -34,8 +34,7 @@ func main() {
 
 	store := agg.NewEphemeralStore()
 
-	// model := openai.NewModel("gpt-5.1", "low")
-	model := anthropic.NewModel(anthropic.Sonnet, 2048, 0, true)
+	model := openai.NewModel(openai.GPT51, "none")
 
 	agent := agg.NewAgent(
 		"You are a helpful assistant.",
