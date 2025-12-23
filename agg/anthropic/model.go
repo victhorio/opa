@@ -1,7 +1,6 @@
 package anthropic
 
 import (
-	"fmt"
 	"log"
 )
 
@@ -66,8 +65,6 @@ func costFromUsage(model ModelID, usage usage) int64 {
 		log.Printf("cannot compute costs: unknown model: %s", model)
 		return 0
 	}
-
-	fmt.Printf("usage: %+v\n", usage)
 
 	return (costs.In*usage.In +
 		costs.InCacheWrite*usage.InCacheWrite +

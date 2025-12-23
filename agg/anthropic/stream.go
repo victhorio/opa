@@ -69,6 +69,15 @@ func (m *Model) OpenStream(
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
+
+		if resp.StatusCode == 400 {
+			// Let's save the payload we were sending.
+			m, err := json.MarshalIndent(payload, "", "  ")
+			if err == nil {
+				core.DumpErrorLog("anthropic-400", string(m))
+			}
+		}
+
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		if err != nil {
 			return nil, fmt.Errorf("anthropic.OpenStream: error reading response body: %w", err)
@@ -279,7 +288,7 @@ func sendEvent(ctx context.Context, out chan<- core.Event, ev core.Event) bool {
 // requestBody is the body of the request to the Anthropic messages endpoint
 type requestBody struct {
 	MaxToks   int        `json:"max_tokens"`
-	Msgs      []msg      `json:"messages"`
+	Msgs      []*msg     `json:"messages"`
 	Model     ModelID    `json:"model"`
 	Stream    bool       `json:"stream"`
 	SysPrompt string     `json:"system,omitempty"`
@@ -366,23 +375,23 @@ const (
 	deltaTypeToolArgs   msgContentType = "input_json_delta"
 )
 
-func newMsgText(text string) msgContent {
-	return msgContent{
+func newMsgText(text string) *msgContent {
+	return &msgContent{
 		Type: msgContTypeText,
 		Text: text,
 	}
 }
 
-func newMsgReason(signature, thinking string) msgContent {
-	return msgContent{
+func newMsgReason(signature, thinking string) *msgContent {
+	return &msgContent{
 		Type:      msgContTypeReason,
 		Signature: signature,
 		Thinking:  thinking,
 	}
 }
 
-func newMsgToolUse(id, name string, args json.RawMessage) msgContent {
-	return msgContent{
+func newMsgToolUse(id, name string, args json.RawMessage) *msgContent {
+	return &msgContent{
 		Type: msgContTypeTool,
 		ID:   id,
 		Name: name,
@@ -390,20 +399,20 @@ func newMsgToolUse(id, name string, args json.RawMessage) msgContent {
 	}
 }
 
-func newMsgToolResult(toolUseID, output string) msgContent {
-	return msgContent{
+func newMsgToolResult(toolUseID, output string) *msgContent {
+	return &msgContent{
 		Type:      msgContTypeToolResult,
 		ToolUseID: toolUseID,
 		Output:    output,
 	}
 }
 
-func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []msg) {
+func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 	var sysPrompt string
 
 	// TODO(optimize): len(msgs) is an upper bound, because some messages coalesce we won't reach it
 	//                 specially for cases with a lot of tool use.
-	r := make([]msg, 0, len(msgs))
+	r := make([]*msg, 0, len(msgs))
 
 	// For Anthropic messages, sequential messages from the same role must be added together,
 	// particularly when both reasoning /and/ tool use are happening. So we need to recall if our
@@ -419,11 +428,11 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []msg) {
 			if lastRole == "assistant" {
 				// let's just append to the contents
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, &content)
+				lastMsg.Content = append(lastMsg.Content, content)
 			} else {
-				r = append(r, msg{
+				r = append(r, &msg{
 					Role:    "assistant",
-					Content: []*msgContent{&content},
+					Content: []*msgContent{content},
 				})
 
 				lastRole = "assistant"
@@ -449,11 +458,11 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []msg) {
 
 			if lastRole == contentCore.Role {
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, &content)
+				lastMsg.Content = append(lastMsg.Content, content)
 			} else {
-				r = append(r, msg{
+				r = append(r, &msg{
 					Role:    contentCore.Role,
-					Content: []*msgContent{&content},
+					Content: []*msgContent{content},
 				})
 				lastRole = contentCore.Role
 			}
@@ -463,11 +472,11 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []msg) {
 
 			if lastRole == "assistant" {
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, &content)
+				lastMsg.Content = append(lastMsg.Content, content)
 			} else {
-				r = append(r, msg{
+				r = append(r, &msg{
 					Role:    "assistant",
-					Content: []*msgContent{&content},
+					Content: []*msgContent{content},
 				})
 				lastRole = "assistant"
 			}
@@ -477,11 +486,11 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []msg) {
 
 			if lastRole == "user" {
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, &content)
+				lastMsg.Content = append(lastMsg.Content, content)
 			} else {
-				r = append(r, msg{
+				r = append(r, &msg{
 					Role:    "user",
-					Content: []*msgContent{&content},
+					Content: []*msgContent{content},
 				})
 				lastRole = "user"
 			}
