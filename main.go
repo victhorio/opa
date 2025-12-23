@@ -35,7 +35,7 @@ func main() {
 	store := agg.NewEphemeralStore()
 
 	model := openai.NewModel(openai.GPT51, "low")
-	// model := anthropic.NewModel(anthropic.Haiku, 2048, 1024, true)
+	// model := anthropic.NewModel(anthropic.Sonnet, 2048, 1024, true)
 
 	agent := agg.NewAgent(
 		"You are a helpful assistant.",

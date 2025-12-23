@@ -333,8 +333,8 @@ func newToolCfg(toolChoice string, disableParallel bool) *toolCfg {
 }
 
 type msg struct {
-	Role    string        `json:"role"` // "user" or "assistant"
-	Content []*msgContent `json:"content"`
+	Role    string            `json:"role"` // "user" or "assistant"
+	Content []json.RawMessage `json:"content"`
 }
 
 type msgContent struct {
@@ -411,42 +411,34 @@ func newMsgToolResult(toolUseID, output string) *msgContent {
 	}
 }
 
-func (m *Model) fromCoreMsgs(msgs []*core.Msg) (string, []*msg) {
+func (m *Model) fromCoreMsgs(coreMsgs []*core.Msg) (string, []*msg) {
 	var sysPrompt string
-
-	// TODO(optimize): len(msgs) is an upper bound, because some messages coalesce we won't reach it
-	//                 specially for cases with a lot of tool use.
-	r := make([]*msg, 0, len(msgs))
+	r := make([]*msg, 0, len(coreMsgs))
 
 	// For Anthropic messages, sequential messages from the same role must be added together,
 	// particularly when both reasoning /and/ tool use are happening. So we need to recall if our
 	// last message was from the same role or not.
 	var lastRole string
 
-	for _, m := range msgs {
-		switch m.Type {
+	for i, coreMsg := range coreMsgs {
+		isLast := i == len(coreMsgs)-1
+
+		switch coreMsg.Type {
 		case core.MsgTypeReasoning:
-			reasoning, _ := m.AsReasoning()
-			content := newMsgReason(reasoning.Encrypted, reasoning.Text)
-
-			if lastRole == "assistant" {
-				// let's just append to the contents
-				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
-			} else {
-				r = append(r, &msg{
-					Role:    "assistant",
-					Content: []*msgContent{content},
-				})
-
-				lastRole = "assistant"
+			if isLast {
+				// This is a problem because our last block may include a CacheCtrl indicator and
+				// reasoning blocks cannot receive it. However, this should /never/ be a problem as
+				// we should /never/ receive an input where the last block is a reasoning block
+				// because it makes no semantic sense.
+				panic("assumption violated: last content block is a reasoning block")
 			}
+			rawContent, role := m.processReasoningMsg(coreMsg)
+			r, lastRole = appendOrCreateMsg(r, lastRole, role, rawContent)
+
 		case core.MsgTypeContent:
-			contentCore, _ := m.AsContent()
-			if contentCore.Role == "system" {
-				if sysPrompt == "" {
-					sysPrompt = contentCore.Text
-				} else {
+			rawContent, role := m.processContentMsg(coreMsg, isLast)
+			if role == "system" {
+				if sysPrompt != "" {
 					// TODO(robust): don't panic here
 					// For reference, originally sysPrompt would be a buffer and anytime we found
 					// a system message, we would append to the buffer. This has two issues: one,
@@ -455,67 +447,149 @@ func (m *Model) fromCoreMsgs(msgs []*core.Msg) (string, []*msg) {
 					// would invalidate all caches.
 					panic("multiple system messages not allowed for anthropic")
 				}
+				content, _ := coreMsg.AsContent()
+				sysPrompt = content.Text
 				continue
 			}
+			r, lastRole = appendOrCreateMsg(r, lastRole, role, rawContent)
 
-			content := newMsgText(contentCore.Text)
-
-			if lastRole == contentCore.Role {
-				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
-			} else {
-				r = append(r, &msg{
-					Role:    contentCore.Role,
-					Content: []*msgContent{content},
-				})
-				lastRole = contentCore.Role
-			}
 		case core.MsgTypeToolCall:
-			toolCall, _ := m.AsToolCall()
-			content := newMsgToolUse(toolCall.ID, toolCall.Name, json.RawMessage(toolCall.Arguments))
-
-			if lastRole == "assistant" {
-				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
-			} else {
-				r = append(r, &msg{
-					Role:    "assistant",
-					Content: []*msgContent{content},
-				})
-				lastRole = "assistant"
+			if isLast {
+				// Semantically we should never receive an input for which the last block is a
+				// tool call block (we get here either through a user message or a tool result).
+				panic("not implemented: last message cannot be a tool call")
 			}
+			rawContent, role := m.processToolCallMsg(coreMsg)
+			r, lastRole = appendOrCreateMsg(r, lastRole, role, rawContent)
+
 		case core.MsgTypeToolResult:
-			toolResult, _ := m.AsToolResult()
-			content := newMsgToolResult(toolResult.ID, toolResult.Result)
+			rawContent, role := m.processToolResultMsg(coreMsg, isLast)
+			r, lastRole = appendOrCreateMsg(r, lastRole, role, rawContent)
 
-			if lastRole == "user" {
-				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
-			} else {
-				r = append(r, &msg{
-					Role:    "user",
-					Content: []*msgContent{content},
-				})
-				lastRole = "user"
-			}
 		default:
-			panic(fmt.Errorf("unknown message type: %d", m.Type))
+			// TODO(robust): don't panic here?
+			panic(fmt.Errorf("unexpected new message type: %d", coreMsg.Type))
 		}
-	}
-
-	if m.shouldCache {
-		// Only Reasoning blocks cannot be cached. However, we can safely assume that the last
-		// content block in the history will /not/ be a reasoning block.
-		lastMsg := r[len(r)-1]
-		lastBlock := lastMsg.Content[len(lastMsg.Content)-1]
-		if lastBlock.Type == msgContTypeReason {
-			panic("assumption violated: last content block is a reasoning block")
-		}
-
-		lastBlock.CacheCtrl = &cacheCtrl{Type: "ephemeral"}
 	}
 
 	return sysPrompt, r
+}
+
+// processReasoningMsg handles Reasoning messages with caching.
+func (m *Model) processReasoningMsg(coreMsg *core.Msg) (json.RawMessage, string) {
+	if coreMsg.CachedTransform != nil {
+		return coreMsg.CachedTransform, "assistant"
+	}
+
+	reasoning, _ := coreMsg.AsReasoning()
+	content := newMsgReason(reasoning.Encrypted, reasoning.Text)
+	rawContent, err := json.Marshal(content)
+	if err != nil {
+		// Should never panic for this type.
+		panic(fmt.Errorf("unexpectedly failed to marshal reasoning message: %w", err))
+	}
+
+	coreMsg.CachedTransform = rawContent
+	return rawContent, "assistant"
+}
+
+// processContentMsg handles Content messages with optional cache control.
+func (m *Model) processContentMsg(coreMsg *core.Msg, isLast bool) (json.RawMessage, string) {
+	content, _ := coreMsg.AsContent()
+
+	// Use cached transform if available and not the last message
+	if !isLast && coreMsg.CachedTransform != nil {
+		return coreMsg.CachedTransform, content.Role
+	}
+
+	// Create msgContent
+	msgCont := newMsgText(content.Text)
+
+	// Add cache control if this is the last message and caching is enabled
+	if isLast && m.shouldCache {
+		msgCont.CacheCtrl = &cacheCtrl{Type: "ephemeral"}
+	}
+
+	// Marshal to JSON
+	rawContent, err := json.Marshal(msgCont)
+	if err != nil {
+		// Should never panic for this type.
+		panic(fmt.Errorf("unexpectedly failed to marshal content message: %w", err))
+	}
+
+	// Cache the result only if not the last message
+	if !isLast {
+		coreMsg.CachedTransform = rawContent
+	}
+
+	return rawContent, content.Role
+}
+
+// processToolCallMsg handles ToolCall messages with caching.
+func (m *Model) processToolCallMsg(coreMsg *core.Msg) (json.RawMessage, string) {
+	if coreMsg.CachedTransform != nil {
+		return coreMsg.CachedTransform, "assistant"
+	}
+
+	toolCall, _ := coreMsg.AsToolCall()
+	content := newMsgToolUse(toolCall.ID, toolCall.Name, json.RawMessage(toolCall.Arguments))
+	rawContent, err := json.Marshal(content)
+	if err != nil {
+		// Should never panic for this type.
+		panic(fmt.Errorf("unexpectedly failed to marshal tool call message: %w", err))
+	}
+
+	coreMsg.CachedTransform = rawContent
+	return rawContent, "assistant"
+}
+
+// processToolResultMsg handles ToolResult messages with optional cache control.
+func (m *Model) processToolResultMsg(coreMsg *core.Msg, isLast bool) (json.RawMessage, string) {
+	// Use cached transform if available and not the last message
+	if !isLast && coreMsg.CachedTransform != nil {
+		return coreMsg.CachedTransform, "user"
+	}
+
+	toolResult, _ := coreMsg.AsToolResult()
+	content := newMsgToolResult(toolResult.ID, toolResult.Result)
+
+	// Add cache control if this is the last message and caching is enabled
+	if isLast && m.shouldCache {
+		content.CacheCtrl = &cacheCtrl{Type: "ephemeral"}
+	}
+
+	// Marshal to JSON
+	rawContent, err := json.Marshal(content)
+	if err != nil {
+		// Should never panic for this type.
+		panic(err)
+	}
+
+	// Cache the result only if not the last message
+	if !isLast {
+		coreMsg.CachedTransform = rawContent
+	}
+
+	return rawContent, "user"
+}
+
+// appendOrCreateMsg appends content to the last message if roles match,
+// or creates a new message otherwise.
+func appendOrCreateMsg(
+	msgs []*msg,
+	lastRole string,
+	newRole string,
+	content json.RawMessage,
+) ([]*msg, string) {
+	if lastRole == newRole && len(msgs) > 0 {
+		msgs[len(msgs)-1].Content = append(msgs[len(msgs)-1].Content, content)
+		return msgs, lastRole
+	}
+
+	return append(msgs, &msg{
+		Role:    newRole,
+		Content: []json.RawMessage{content},
+	}), newRole
 }
 
 type tool struct {

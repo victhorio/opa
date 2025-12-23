@@ -263,17 +263,17 @@ func sendEvent(ctx context.Context, out chan<- core.Event, ev core.Event) bool {
 
 // requestBody is the body of the request to the OpenAI responses endpoint.
 type requestBody struct {
-	Include           []string      `json:"include,omitempty"`
-	Input             []*msg        `json:"input"`
-	MaxOutputTokens   int           `json:"max_output_tokens,omitempty"`
-	Model             ModelID       `json:"model,omitempty"`
-	ParallelToolCalls *bool         `json:"parallel_tool_calls,omitempty"`
-	Reasoning         *reasoningCfg `json:"reasoning,omitempty"`
-	Store             *bool         `json:"store,omitempty"`
-	Stream            bool          `json:"stream,omitempty"`
-	Temperature       float64       `json:"temperature,omitempty"`
-	ToolChoice        string        `json:"tool_choice,omitempty"`
-	Tools             []tool        `json:"tools,omitempty"`
+	Include           []string          `json:"include,omitempty"`
+	Input             []json.RawMessage `json:"input"`
+	MaxOutputTokens   int               `json:"max_output_tokens,omitempty"`
+	Model             ModelID           `json:"model,omitempty"`
+	ParallelToolCalls *bool             `json:"parallel_tool_calls,omitempty"`
+	Reasoning         *reasoningCfg     `json:"reasoning,omitempty"`
+	Store             *bool             `json:"store,omitempty"`
+	Stream            bool              `json:"stream,omitempty"`
+	Temperature       float64           `json:"temperature,omitempty"`
+	ToolChoice        string            `json:"tool_choice,omitempty"`
+	Tools             []tool            `json:"tools,omitempty"`
 }
 
 type reasoningCfg struct {
@@ -341,22 +341,55 @@ func newMsgToolResult(callID, result string) *msg {
 	}
 }
 
-func fromCoreMsgs(messages []*core.Msg) []*msg {
-	adapted := make([]*msg, 0, len(messages))
+func fromCoreMsgs(messages []*core.Msg) []json.RawMessage {
+	adapted := make([]json.RawMessage, 0, len(messages))
 	for _, message := range messages {
+		if message.CachedTransform != nil {
+			adapted = append(adapted, message.CachedTransform)
+			continue
+		}
+
 		switch message.Type {
 		case core.MsgTypeReasoning:
 			reasoning, _ := message.AsReasoning()
-			adapted = append(adapted, newMsgReasoning(reasoning.Encrypted))
+
+			m, err := json.Marshal(newMsgReasoning(reasoning.Encrypted))
+			if err != nil {
+				panic(err)
+			}
+
+			message.CachedTransform = m
+			adapted = append(adapted, m)
 		case core.MsgTypeContent:
 			content, _ := message.AsContent()
-			adapted = append(adapted, newMsgContent(content.Role, content.Text))
+
+			m, err := json.Marshal(newMsgContent(content.Role, content.Text))
+			if err != nil {
+				panic(err)
+			}
+
+			message.CachedTransform = m
+			adapted = append(adapted, m)
 		case core.MsgTypeToolCall:
 			toolCall, _ := message.AsToolCall()
-			adapted = append(adapted, newMsgToolCall(toolCall.ID, toolCall.Name, toolCall.Arguments))
+
+			m, err := json.Marshal(newMsgToolCall(toolCall.ID, toolCall.Name, toolCall.Arguments))
+			if err != nil {
+				panic(err)
+			}
+
+			message.CachedTransform = m
+			adapted = append(adapted, m)
 		case core.MsgTypeToolResult:
 			toolResult, _ := message.AsToolResult()
-			adapted = append(adapted, newMsgToolResult(toolResult.ID, toolResult.Result))
+
+			m, err := json.Marshal(newMsgToolResult(toolResult.ID, toolResult.Result))
+			if err != nil {
+				panic(err)
+			}
+
+			message.CachedTransform = m
+			adapted = append(adapted, m)
 		default:
 			panic(fmt.Errorf("unknown message type: %d", message.Type))
 		}

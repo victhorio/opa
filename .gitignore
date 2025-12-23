@@ -1,5 +1,5 @@
 # Binaries for programs and plugins
-goba
+opa
 *.exe
 *.exe~
 *.dll
@@ -21,3 +21,6 @@ go.work.sum
 
 # env file
 .env
+
+# Dev tools
+.claude/
