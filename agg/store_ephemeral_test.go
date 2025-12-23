@@ -20,7 +20,7 @@ func TestEphemeralStore(t *testing.T) {
 	}
 
 	// add things under key "k1"
-	msgs = []core.Msg{
+	msgs = []*core.Msg{
 		core.NewMsgContent("user", "Hello!"),
 		core.NewMsgReasoning("123456", ""),
 		core.NewMsgToolCall("1", "fn", "{}"),
@@ -66,7 +66,7 @@ func TestEphemeralStore(t *testing.T) {
 
 	// let's add more messages and make sure extend works as intended
 
-	msgs = []core.Msg{
+	msgs = []*core.Msg{
 		core.NewMsgContent("assistant", "Ok!"),
 		core.NewMsgContent("user", "Can you repeat my name to me?"),
 		core.NewMsgContent("assistant", "Victhor"),

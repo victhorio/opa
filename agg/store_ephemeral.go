@@ -3,21 +3,21 @@ package agg
 import "github.com/victhorio/opa/agg/core"
 
 type EphemeralStore struct {
-	m map[string][]core.Msg
+	m map[string][]*core.Msg
 	u map[string]core.Usage
 }
 
 func NewEphemeralStore() EphemeralStore {
 	return EphemeralStore{
-		m: make(map[string][]core.Msg),
+		m: make(map[string][]*core.Msg),
 		u: make(map[string]core.Usage),
 	}
 }
 
-func (s EphemeralStore) Messages(key string) []core.Msg {
+func (s EphemeralStore) Messages(key string) []*core.Msg {
 	m, ok := s.m[key]
 	if !ok {
-		return []core.Msg{}
+		return []*core.Msg{}
 	}
 	return m
 }
@@ -32,7 +32,7 @@ func (s EphemeralStore) Usage(key string) core.Usage {
 
 func (s *EphemeralStore) Extend(
 	key string,
-	msgs []core.Msg,
+	msgs []*core.Msg,
 	usage core.Usage,
 ) error {
 	m := s.Messages(key)

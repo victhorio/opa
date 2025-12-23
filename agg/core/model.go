@@ -14,7 +14,7 @@ type StreamCfg struct {
 
 // Model represents an AI model provider that can create response streams.
 type Model interface {
-	OpenStream(ctx context.Context, client *http.Client, msgs []Msg, tools []Tool, cfg StreamCfg) (ResponseStream, error)
+	OpenStream(ctx context.Context, client *http.Client, msgs []*Msg, tools []Tool, cfg StreamCfg) (ResponseStream, error)
 	Provider() Provider
 }
 

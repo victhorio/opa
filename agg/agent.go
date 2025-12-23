@@ -198,7 +198,7 @@ func (a *Agent) Run(
 	// only readd reasoning to the context if (1) the reasoning block precedes a tool call and (2)
 	// no user messages exist after this tool call yet. Since we already carried out the tool call
 	// loop above, there's no reason to ever waste resources storing these reasoning loops.
-	msgsToStore := make([]core.Msg, 0, len(msgs)-msgsStoreIdx)
+	msgsToStore := make([]*core.Msg, 0, len(msgs)-msgsStoreIdx)
 	for _, msg := range msgs[msgsStoreIdx:] {
 		if msg.Type != core.MsgTypeReasoning {
 			msgsToStore = append(msgsToStore, msg)

@@ -25,7 +25,7 @@ type Stream struct {
 func (m *Model) OpenStream(
 	ctx context.Context,
 	client *http.Client,
-	messages []core.Msg,
+	messages []*core.Msg,
 	tools []core.Tool,
 	cfg core.StreamCfg,
 ) (core.ResponseStream, error) {
@@ -229,8 +229,8 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	return false
 }
 
-func toCoreMessages(output []item) []core.Msg {
-	messages := make([]core.Msg, 0, len(output))
+func toCoreMessages(output []item) []*core.Msg {
+	messages := make([]*core.Msg, 0, len(output))
 
 	for _, item := range output {
 		switch item.Type {
@@ -264,7 +264,7 @@ func sendEvent(ctx context.Context, out chan<- core.Event, ev core.Event) bool {
 // requestBody is the body of the request to the OpenAI responses endpoint.
 type requestBody struct {
 	Include           []string      `json:"include,omitempty"`
-	Input             []msg         `json:"input"`
+	Input             []*msg        `json:"input"`
 	MaxOutputTokens   int           `json:"max_output_tokens,omitempty"`
 	Model             ModelID       `json:"model,omitempty"`
 	ParallelToolCalls *bool         `json:"parallel_tool_calls,omitempty"`
@@ -308,24 +308,24 @@ type msg struct {
 	Output string `json:"output,omitempty"`
 }
 
-func newMsgReasoning(encrypted string) msg {
-	return msg{
+func newMsgReasoning(encrypted string) *msg {
+	return &msg{
 		Type:      msgTypeReasoning,
 		Encrypted: encrypted,
 		Summary:   &[]string{},
 	}
 }
 
-func newMsgContent(role, content string) msg {
-	return msg{
+func newMsgContent(role, content string) *msg {
+	return &msg{
 		Type:    msgTypeContent,
 		Role:    role,
 		Content: content,
 	}
 }
 
-func newMsgToolCall(callID, name, arguments string) msg {
-	return msg{
+func newMsgToolCall(callID, name, arguments string) *msg {
+	return &msg{
 		Type:      msgTypeToolCall,
 		CallID:    callID,
 		Name:      name,
@@ -333,16 +333,16 @@ func newMsgToolCall(callID, name, arguments string) msg {
 	}
 }
 
-func newMsgToolResult(callID, result string) msg {
-	return msg{
+func newMsgToolResult(callID, result string) *msg {
+	return &msg{
 		Type:   msgTypeToolResult,
 		CallID: callID,
 		Output: result,
 	}
 }
 
-func fromCoreMessages(messages []core.Msg) []msg {
-	adapted := make([]msg, 0, len(messages))
+func fromCoreMessages(messages []*core.Msg) []*msg {
+	adapted := make([]*msg, 0, len(messages))
 	for _, message := range messages {
 		switch message.Type {
 		case core.MsgTypeReasoning:

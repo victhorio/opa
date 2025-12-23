@@ -22,33 +22,33 @@ type Msg struct {
 	ToolResult *ToolResult `json:"toolResult,omitempty"`
 }
 
-func NewMsgReasoning(encrypted, text string) Msg {
-	return Msg{
+func NewMsgReasoning(encrypted, text string) *Msg {
+	return &Msg{
 		Type:      MsgTypeReasoning,
 		Reasoning: &Reasoning{Encrypted: encrypted, Text: text},
 	}
 }
 
-func NewMsgContent(role, text string) Msg {
+func NewMsgContent(role, text string) *Msg {
 	if role != "assistant" && role != "user" && role != "system" {
 		panic(fmt.Errorf("invalid role: %s", role))
 	}
 
-	return Msg{
+	return &Msg{
 		Type:    MsgTypeContent,
 		Content: &Content{Role: role, Text: text},
 	}
 }
 
-func NewMsgToolCall(id, name, arguments string) Msg {
-	return Msg{
+func NewMsgToolCall(id, name, arguments string) *Msg {
+	return &Msg{
 		Type:     MsgTypeToolCall,
 		ToolCall: &ToolCall{ID: id, Name: name, Arguments: arguments},
 	}
 }
 
-func NewMsgToolResult(id, result string) Msg {
-	return Msg{
+func NewMsgToolResult(id, result string) *Msg {
+	return &Msg{
 		Type:       MsgTypeToolResult,
 		ToolResult: &ToolResult{ID: id, Result: result},
 	}

@@ -20,7 +20,7 @@ func TestSimpleMessage(t *testing.T) {
 	client := &http.Client{}
 	ch := make(chan core.Event, 1)
 
-	msgs := []core.Msg{
+	msgs := []*core.Msg{
 		core.NewMsgContent("user", "What is the capital of France?"),
 	}
 
@@ -70,7 +70,7 @@ func TestMultiTurnMessages(t *testing.T) {
 	client := &http.Client{}
 	ch := make(chan core.Event, 1)
 
-	msgs := make([]core.Msg, 0, 4)
+	msgs := make([]*core.Msg, 0, 4)
 	msgs = append(
 		msgs,
 		core.NewMsgContent("user", "Hi! My name is Victhor, what is your name?"),
@@ -151,7 +151,7 @@ func TestToolCall(t *testing.T) {
 	client := &http.Client{}
 	ch := make(chan core.Event, 1)
 
-	msgs := []core.Msg{
+	msgs := []*core.Msg{
 		core.NewMsgContent("user", "What is the weather in Tokyo? In Celsius"),
 	}
 

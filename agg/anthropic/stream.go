@@ -23,7 +23,7 @@ type Stream struct {
 func (m *Model) OpenStream(
 	ctx context.Context,
 	client *http.Client,
-	messages []core.Msg,
+	messages []*core.Msg,
 	tools []core.Tool,
 	cfg core.StreamCfg,
 ) (core.ResponseStream, error) {
@@ -411,7 +411,7 @@ func newMsgToolResult(toolUseID, output string) *msgContent {
 	}
 }
 
-func (m *Model) fromCoreMsgs(msgs []core.Msg) (string, []*msg) {
+func (m *Model) fromCoreMsgs(msgs []*core.Msg) (string, []*msg) {
 	var sysPrompt string
 
 	// TODO(optimize): len(msgs) is an upper bound, because some messages coalesce we won't reach it
