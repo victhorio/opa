@@ -31,7 +31,7 @@ func (m *Model) OpenStream(
 ) (core.ResponseStream, error) {
 	payload := requestBody{
 		Include: []string{"reasoning.encrypted_content"},
-		Input:   fromCoreMessages(messages),
+		Input:   fromCoreMsgs(messages),
 		Model:   m.model,
 		Store:   boolPtr(false),
 		Stream:  true,
@@ -179,7 +179,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 				Total:     r.Usage.Input + r.Usage.Output,
 				Cost:      costFromUsage(s.modelID, r.Usage),
 			},
-			Messages: toCoreMessages(r.Output),
+			Messages: toCoreMsgs(r.Output),
 		}
 		if !sendEvent(ctx, out, core.NewEvResp(responsePub)) {
 			return true
@@ -229,7 +229,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	return false
 }
 
-func toCoreMessages(output []item) []*core.Msg {
+func toCoreMsgs(output []item) []*core.Msg {
 	messages := make([]*core.Msg, 0, len(output))
 
 	for _, item := range output {
@@ -341,7 +341,7 @@ func newMsgToolResult(callID, result string) *msg {
 	}
 }
 
-func fromCoreMessages(messages []*core.Msg) []*msg {
+func fromCoreMsgs(messages []*core.Msg) []*msg {
 	adapted := make([]*msg, 0, len(messages))
 	for _, message := range messages {
 		switch message.Type {

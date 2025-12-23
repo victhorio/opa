@@ -18,8 +18,8 @@ type Msg struct {
 	Type       MsgType     `json:"type"`
 	Reasoning  *Reasoning  `json:"reasoning,omitempty"`
 	Content    *Content    `json:"content,omitempty"`
-	ToolCall   *ToolCall   `json:"toolCall,omitempty"`
-	ToolResult *ToolResult `json:"toolResult,omitempty"`
+	ToolCall   *ToolCall   `json:"tool_call,omitempty"`
+	ToolResult *ToolResult `json:"tool_result,omitempty"`
 }
 
 func NewMsgReasoning(encrypted, text string) *Msg {
