@@ -58,9 +58,9 @@ func (a *Agent) Run(
 
 	// if it's the first message for this session, we need to include system prompt
 	if msgsStoreIdx == 0 {
-		msgs = append(msgs, core.NewMessageContent("system", a.sysPrompt))
+		msgs = append(msgs, core.NewMsgContent("system", a.sysPrompt))
 	}
-	msgs = append(msgs, core.NewMessageContent("user", input))
+	msgs = append(msgs, core.NewMsgContent("user", input))
 
 	var usage core.Usage
 	var out bytes.Buffer
@@ -98,7 +98,7 @@ func (a *Agent) Run(
 
 			switch a.model.Provider() {
 			case core.ProviderOpenAI:
-				msgs = append(msgs, core.NewMessageContent("system", toolCallLimitReachedPrompt))
+				msgs = append(msgs, core.NewMsgContent("system", toolCallLimitReachedPrompt))
 			case core.ProviderAnthropic:
 				cfg.DisableTools = true
 			}
@@ -155,7 +155,7 @@ func (a *Agent) Run(
 				resp = event.Response
 
 				lastMsg := resp.Messages[len(resp.Messages)-1]
-				content, ok := lastMsg.Content()
+				content, ok := lastMsg.AsContent()
 				if ok {
 					out.WriteString(content.Text)
 				}
@@ -179,7 +179,7 @@ func (a *Agent) Run(
 			case <-ctx.Done():
 				return "", fmt.Errorf("Agent.Run: context error: %w", ctx.Err())
 			case toolResult := <-toolResults:
-				msgs = append(msgs, core.NewMessageToolResult(toolResult.ID, toolResult.Result))
+				msgs = append(msgs, core.NewMsgToolResult(toolResult.ID, toolResult.Result))
 
 				if includeInternals {
 					fmt.Fprintf(&out, "\n[Tool Result: %s, %s]\n\n", toolResult.ID, toolResult.Result)
@@ -198,9 +198,9 @@ func (a *Agent) Run(
 	// only readd reasoning to the context if (1) the reasoning block precedes a tool call and (2)
 	// no user messages exist after this tool call yet. Since we already carried out the tool call
 	// loop above, there's no reason to ever waste resources storing these reasoning loops.
-	msgsToStore := make([]core.Message, 0, len(msgs)-msgsStoreIdx)
+	msgsToStore := make([]core.Msg, 0, len(msgs)-msgsStoreIdx)
 	for _, msg := range msgs[msgsStoreIdx:] {
-		if msg.Type != core.MTReasoning {
+		if msg.Type != core.MsgTypeReasoning {
 			msgsToStore = append(msgsToStore, msg)
 		}
 	}

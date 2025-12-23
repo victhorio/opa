@@ -25,7 +25,7 @@ type Stream struct {
 func (m *Model) OpenStream(
 	ctx context.Context,
 	client *http.Client,
-	messages []core.Message,
+	messages []core.Msg,
 	tools []core.Tool,
 	cfg core.StreamCfg,
 ) (core.ResponseStream, error) {
@@ -229,21 +229,21 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	return false
 }
 
-func toCoreMessages(output []item) []core.Message {
-	messages := make([]core.Message, 0, len(output))
+func toCoreMessages(output []item) []core.Msg {
+	messages := make([]core.Msg, 0, len(output))
 
 	for _, item := range output {
 		switch item.Type {
 		case etfReasoning:
-			messages = append(messages, core.NewMessageReasoning(item.EncryptedContent, ""))
+			messages = append(messages, core.NewMsgReasoning(item.EncryptedContent, ""))
 		case etfMessage:
 			if len(item.Content) != 1 {
 				panic(fmt.Errorf("expected 1 content item, got %d", len(item.Content)))
 			}
 
-			messages = append(messages, core.NewMessageContent(item.Role, item.Content[0].Text))
+			messages = append(messages, core.NewMsgContent(item.Role, item.Content[0].Text))
 		case etfFunctionCall:
-			messages = append(messages, core.NewMessageToolCall(item.CallID, item.Name, item.Arguments))
+			messages = append(messages, core.NewMsgToolCall(item.CallID, item.Name, item.Arguments))
 		default:
 			panic(fmt.Errorf("unknown item type: %s", item.Type))
 		}
@@ -341,21 +341,21 @@ func newMsgToolResult(callID, result string) msg {
 	}
 }
 
-func fromCoreMessages(messages []core.Message) []msg {
+func fromCoreMessages(messages []core.Msg) []msg {
 	adapted := make([]msg, 0, len(messages))
 	for _, message := range messages {
 		switch message.Type {
-		case core.MTReasoning:
-			reasoning, _ := message.Reasoning()
+		case core.MsgTypeReasoning:
+			reasoning, _ := message.AsReasoning()
 			adapted = append(adapted, newMsgReasoning(reasoning.Encrypted))
-		case core.MTContent:
-			content, _ := message.Content()
+		case core.MsgTypeContent:
+			content, _ := message.AsContent()
 			adapted = append(adapted, newMsgContent(content.Role, content.Text))
-		case core.MTToolCall:
-			toolCall, _ := message.ToolCall()
+		case core.MsgTypeToolCall:
+			toolCall, _ := message.AsToolCall()
 			adapted = append(adapted, newMsgToolCall(toolCall.ID, toolCall.Name, toolCall.Arguments))
-		case core.MTToolResult:
-			toolResult, _ := message.ToolResult()
+		case core.MsgTypeToolResult:
+			toolResult, _ := message.AsToolResult()
 			adapted = append(adapted, newMsgToolResult(toolResult.ID, toolResult.Result))
 		default:
 			panic(fmt.Errorf("unknown message type: %d", message.Type))

@@ -20,11 +20,11 @@ func TestEphemeralStore(t *testing.T) {
 	}
 
 	// add things under key "k1"
-	msgs = []core.Message{
-		core.NewMessageContent("user", "Hello!"),
-		core.NewMessageReasoning("123456", ""),
-		core.NewMessageToolCall("1", "fn", "{}"),
-		core.NewMessageToolResult("1", "ok"),
+	msgs = []core.Msg{
+		core.NewMsgContent("user", "Hello!"),
+		core.NewMsgReasoning("123456", ""),
+		core.NewMsgToolCall("1", "fn", "{}"),
+		core.NewMsgToolResult("1", "ok"),
 	}
 
 	usage = core.Usage{
@@ -66,10 +66,10 @@ func TestEphemeralStore(t *testing.T) {
 
 	// let's add more messages and make sure extend works as intended
 
-	msgs = []core.Message{
-		core.NewMessageContent("assistant", "Ok!"),
-		core.NewMessageContent("user", "Can you repeat my name to me?"),
-		core.NewMessageContent("assistant", "Victhor"),
+	msgs = []core.Msg{
+		core.NewMsgContent("assistant", "Ok!"),
+		core.NewMsgContent("user", "Can you repeat my name to me?"),
+		core.NewMsgContent("assistant", "Victhor"),
 	}
 	usage = core.Usage{
 		Input:  1280,
@@ -103,14 +103,14 @@ func TestEphemeralStore(t *testing.T) {
 	}
 
 	// make sure messages are in the correct order
-	expectedMsgTypes := []core.MessageType{
-		core.MTContent,
-		core.MTReasoning,
-		core.MTToolCall,
-		core.MTToolResult,
-		core.MTContent,
-		core.MTContent,
-		core.MTContent,
+	expectedMsgTypes := []core.MsgType{
+		core.MsgTypeContent,
+		core.MsgTypeReasoning,
+		core.MsgTypeToolCall,
+		core.MsgTypeToolResult,
+		core.MsgTypeContent,
+		core.MsgTypeContent,
+		core.MsgTypeContent,
 	}
 
 	for i, msg := range msgs {

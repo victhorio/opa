@@ -3,7 +3,7 @@ package core
 type Response struct {
 	Model    string
 	Usage    Usage
-	Messages []Message
+	Messages []Msg
 }
 
 type Usage struct {

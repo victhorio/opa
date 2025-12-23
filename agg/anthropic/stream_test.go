@@ -20,8 +20,8 @@ func TestSimpleMessage(t *testing.T) {
 	client := &http.Client{}
 	ch := make(chan core.Event, 1)
 
-	msgs := []core.Message{
-		core.NewMessageContent("user", "What is the capital of France?"),
+	msgs := []core.Msg{
+		core.NewMsgContent("user", "What is the capital of France?"),
 	}
 
 	model := NewModel(Haiku, 2048, 1024, false)
@@ -51,7 +51,7 @@ func TestSimpleMessage(t *testing.T) {
 	}
 
 	msg := r.Messages[len(r.Messages)-1]
-	content, ok := msg.Content()
+	content, ok := msg.AsContent()
 	if !ok {
 		t.Fatalf("Last message is not a content message, got %d", msg.Type)
 	}
@@ -70,10 +70,10 @@ func TestMultiTurnMessages(t *testing.T) {
 	client := &http.Client{}
 	ch := make(chan core.Event, 1)
 
-	msgs := make([]core.Message, 0, 4)
+	msgs := make([]core.Msg, 0, 4)
 	msgs = append(
 		msgs,
-		core.NewMessageContent("user", "Hi! My name is Victhor, what is your name?"),
+		core.NewMsgContent("user", "Hi! My name is Victhor, what is your name?"),
 	)
 
 	model := NewModel(Haiku, 2048, 1024, false)
@@ -103,7 +103,7 @@ func TestMultiTurnMessages(t *testing.T) {
 	}
 
 	msgs = append(msgs, r.Messages...)
-	msgs = append(msgs, core.NewMessageContent("user", "Can you repeat my name to me?"))
+	msgs = append(msgs, core.NewMsgContent("user", "Can you repeat my name to me?"))
 
 	ch = make(chan core.Event, 1)
 	secondStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{}, core.StreamCfg{})
@@ -132,7 +132,7 @@ func TestMultiTurnMessages(t *testing.T) {
 	}
 
 	msg := r2.Messages[len(r2.Messages)-1]
-	content, ok := msg.Content()
+	content, ok := msg.AsContent()
 	if !ok {
 		t.Fatalf("Last message is not a content message, got %d", msg.Type)
 	}
@@ -151,8 +151,8 @@ func TestToolCall(t *testing.T) {
 	client := &http.Client{}
 	ch := make(chan core.Event, 1)
 
-	msgs := []core.Message{
-		core.NewMessageContent("user", "What is the weather in Tokyo? In Celsius"),
+	msgs := []core.Msg{
+		core.NewMsgContent("user", "What is the weather in Tokyo? In Celsius"),
 	}
 
 	model := NewModel(Haiku, 2048, 1024, false)
@@ -214,7 +214,7 @@ func TestToolCall(t *testing.T) {
 	}
 
 	msg := r.Messages[len(r.Messages)-1]
-	msg_tc, ok := msg.ToolCall()
+	msg_tc, ok := msg.AsToolCall()
 	if !ok {
 		t.Fatalf("Last message is not a tool call message, got %d", msg.Type)
 	}
@@ -226,7 +226,7 @@ func TestToolCall(t *testing.T) {
 	}
 
 	// now let's add a tool result and check if it answers correctly
-	toolResult := core.NewMessageToolResult(tc.ID, `{"temperature": 25, "description": "Sunny"}`)
+	toolResult := core.NewMsgToolResult(tc.ID, `{"temperature": 25, "description": "Sunny"}`)
 	msgs = append(msgs, r.Messages...)
 	msgs = append(msgs, toolResult)
 
@@ -256,7 +256,7 @@ func TestToolCall(t *testing.T) {
 	}
 
 	msg = r2.Messages[len(r2.Messages)-1]
-	content, ok := msg.Content()
+	content, ok := msg.AsContent()
 	if !ok {
 		t.Fatalf("Last message is not a content message, got %d", msg.Type)
 	}

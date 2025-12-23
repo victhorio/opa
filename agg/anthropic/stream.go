@@ -23,7 +23,7 @@ type Stream struct {
 func (m *Model) OpenStream(
 	ctx context.Context,
 	client *http.Client,
-	messages []core.Message,
+	messages []core.Msg,
 	tools []core.Tool,
 	cfg core.StreamCfg,
 ) (core.ResponseStream, error) {
@@ -193,14 +193,14 @@ func (s *Stream) dispatchRawEvent(
 	case stContBlockStart:
 		switch ev.ContentBlock.Type {
 		case msgContTypeReason:
-			resp.Messages = append(resp.Messages, core.NewMessageReasoning("", ""))
+			resp.Messages = append(resp.Messages, core.NewMsgReasoning("", ""))
 		case msgContTypeText:
-			resp.Messages = append(resp.Messages, core.NewMessageContent("assistant", ""))
+			resp.Messages = append(resp.Messages, core.NewMsgContent("assistant", ""))
 		case msgContTypeTool:
 			// in this instance, we get the ID and Name of tools already in this block
 			resp.Messages = append(
 				resp.Messages,
-				core.NewMessageToolCall(ev.ContentBlock.ID, ev.ContentBlock.Name, ""),
+				core.NewMsgToolCall(ev.ContentBlock.ID, ev.ContentBlock.Name, ""),
 			)
 		default:
 			fmt.Printf("\033[31;1munknown content block type:\033[0m %s\n", ev.ContentBlock.Type)
@@ -210,7 +210,7 @@ func (s *Stream) dispatchRawEvent(
 		lastMsg := resp.Messages[len(resp.Messages)-1]
 		switch ev.Delta.Type {
 		case deltaTypeReasonText:
-			reasoning, ok := lastMsg.Reasoning()
+			reasoning, ok := lastMsg.AsReasoning()
 			if !ok {
 				// TODO(robust): don't fatal here
 				log.Fatalf("last message is not a reasoning message, but got a reasoning delta")
@@ -219,7 +219,7 @@ func (s *Stream) dispatchRawEvent(
 			// TODO(optimize): eventually be smarter here and use a buffer for intermediate building
 			reasoning.Text += ev.Delta.Thinking
 		case deltaTypeEncrypted:
-			reasoning, ok := lastMsg.Reasoning()
+			reasoning, ok := lastMsg.AsReasoning()
 			if !ok {
 				// TODO(robust): don't fatal here
 				log.Fatalf("last message is not a reasoning message, but got a reasoning delta")
@@ -233,7 +233,7 @@ func (s *Stream) dispatchRawEvent(
 				return true, fmt.Errorf("context done")
 			}
 
-			content, ok := lastMsg.Content()
+			content, ok := lastMsg.AsContent()
 			if !ok {
 				// TODO(robust): don't fatal here
 				log.Fatalf("last message is not a content message, but got a text delta")
@@ -242,7 +242,7 @@ func (s *Stream) dispatchRawEvent(
 			// TODO(optimize): eventually be smarter here and use a buffer for intermediate building
 			content.Text += ev.Delta.Text
 		case deltaTypeToolArgs:
-			toolCall, ok := lastMsg.ToolCall()
+			toolCall, ok := lastMsg.AsToolCall()
 			if !ok {
 				// TODO(robust): don't fatal here
 				log.Fatalf("last message is not a tool call message, but got a tool args delta")
@@ -260,13 +260,13 @@ func (s *Stream) dispatchRawEvent(
 		// its text. We're also meant to emit tool calls once they're done.
 		lastMsg := resp.Messages[len(resp.Messages)-1]
 		switch lastMsg.Type {
-		case core.MTToolCall:
-			toolCall, _ := lastMsg.ToolCall()
+		case core.MsgTypeToolCall:
+			toolCall, _ := lastMsg.AsToolCall()
 			if ok := sendEvent(ctx, out, core.NewEvToolCall(*toolCall)); !ok {
 				return true, fmt.Errorf("context done")
 			}
-		case core.MTReasoning:
-			reasoning, _ := lastMsg.Reasoning()
+		case core.MsgTypeReasoning:
+			reasoning, _ := lastMsg.AsReasoning()
 			if ok := sendEvent(ctx, out, core.NewEvDeltaReason(reasoning.Text)); !ok {
 				return true, fmt.Errorf("context done")
 			}
@@ -411,7 +411,7 @@ func newMsgToolResult(toolUseID, output string) *msgContent {
 	}
 }
 
-func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []*msg) {
+func (m *Model) fromCoreMsgs(msgs []core.Msg) (string, []*msg) {
 	var sysPrompt string
 
 	// TODO(optimize): len(msgs) is an upper bound, because some messages coalesce we won't reach it
@@ -425,8 +425,8 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 
 	for _, m := range msgs {
 		switch m.Type {
-		case core.MTReasoning:
-			reasoning, _ := m.Reasoning()
+		case core.MsgTypeReasoning:
+			reasoning, _ := m.AsReasoning()
 			content := newMsgReason(reasoning.Encrypted, reasoning.Text)
 
 			if lastRole == "assistant" {
@@ -441,8 +441,8 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 
 				lastRole = "assistant"
 			}
-		case core.MTContent:
-			contentCore, _ := m.Content()
+		case core.MsgTypeContent:
+			contentCore, _ := m.AsContent()
 			if contentCore.Role == "system" {
 				if sysPrompt == "" {
 					sysPrompt = contentCore.Text
@@ -470,8 +470,8 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 				})
 				lastRole = contentCore.Role
 			}
-		case core.MTToolCall:
-			toolCall, _ := m.ToolCall()
+		case core.MsgTypeToolCall:
+			toolCall, _ := m.AsToolCall()
 			content := newMsgToolUse(toolCall.ID, toolCall.Name, json.RawMessage(toolCall.Arguments))
 
 			if lastRole == "assistant" {
@@ -484,8 +484,8 @@ func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 				})
 				lastRole = "assistant"
 			}
-		case core.MTToolResult:
-			toolResult, _ := m.ToolResult()
+		case core.MsgTypeToolResult:
+			toolResult, _ := m.AsToolResult()
 			content := newMsgToolResult(toolResult.ID, toolResult.Result)
 
 			if lastRole == "user" {

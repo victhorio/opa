@@ -3,7 +3,7 @@ package agg
 import "github.com/victhorio/opa/agg/core"
 
 type Store interface {
-	Messages(string) []core.Message
+	Messages(string) []core.Msg
 	Usage(string) core.Usage
-	Extend(string, []core.Message, core.Usage) error
+	Extend(string, []core.Msg, core.Usage) error
 }

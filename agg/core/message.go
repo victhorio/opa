@@ -1,162 +1,116 @@
 package core
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 )
 
-type MessageType int
+type MsgType int
 
 const (
-	MTUninitialized MessageType = iota
-	MTReasoning
-	MTContent
-	MTToolCall
-	MTToolResult
+	MsgTypeUnknown MsgType = iota
+	MsgTypeReasoning
+	MsgTypeContent
+	MsgTypeToolCall
+	MsgTypeToolResult
 )
 
-type Message struct {
-	Type       MessageType
-	reasoning  *Reasoning
-	content    *Content
-	toolCall   *ToolCall
-	toolResult *ToolResult
+type Msg struct {
+	Type       MsgType     `json:"type"`
+	Reasoning  *Reasoning  `json:"reasoning,omitempty"`
+	Content    *Content    `json:"content,omitempty"`
+	ToolCall   *ToolCall   `json:"toolCall,omitempty"`
+	ToolResult *ToolResult `json:"toolResult,omitempty"`
 }
 
-func NewMessageReasoning(encrypted, text string) Message {
-	return Message{
-		Type:      MTReasoning,
-		reasoning: &Reasoning{Encrypted: encrypted, Text: text},
+func NewMsgReasoning(encrypted, text string) Msg {
+	return Msg{
+		Type:      MsgTypeReasoning,
+		Reasoning: &Reasoning{Encrypted: encrypted, Text: text},
 	}
 }
 
-func NewMessageContent(role, text string) Message {
+func NewMsgContent(role, text string) Msg {
 	if role != "assistant" && role != "user" && role != "system" {
 		panic(fmt.Errorf("invalid role: %s", role))
 	}
 
-	return Message{
-		Type:    MTContent,
-		content: &Content{Role: role, Text: text},
+	return Msg{
+		Type:    MsgTypeContent,
+		Content: &Content{Role: role, Text: text},
 	}
 }
 
-func NewMessageToolCall(id, name, arguments string) Message {
-	return Message{
-		Type:     MTToolCall,
-		toolCall: &ToolCall{ID: id, Name: name, Arguments: arguments},
+func NewMsgToolCall(id, name, arguments string) Msg {
+	return Msg{
+		Type:     MsgTypeToolCall,
+		ToolCall: &ToolCall{ID: id, Name: name, Arguments: arguments},
 	}
 }
 
-func NewMessageToolResult(id, result string) Message {
-	return Message{
-		Type:       MTToolResult,
-		toolResult: &ToolResult{ID: id, Result: result},
+func NewMsgToolResult(id, result string) Msg {
+	return Msg{
+		Type:       MsgTypeToolResult,
+		ToolResult: &ToolResult{ID: id, Result: result},
 	}
 }
 
-func (m *Message) Reasoning() (*Reasoning, bool) {
-	if m.Type != MTReasoning {
+func (m *Msg) AsReasoning() (*Reasoning, bool) {
+	if m.Type != MsgTypeReasoning {
 		return nil, false
 	}
-	if m.reasoning == nil {
+	if m.Reasoning == nil {
 		panic("reasoning is nil, even though type is MTReasoning")
 	}
-	return m.reasoning, true
+	return m.Reasoning, true
 }
 
-func (m *Message) Content() (*Content, bool) {
-	if m.Type != MTContent {
+func (m *Msg) AsContent() (*Content, bool) {
+	if m.Type != MsgTypeContent {
 		return nil, false
 	}
-	if m.content == nil {
+	if m.Content == nil {
 		panic("content is nil, even though type is MTContent")
 	}
-	return m.content, true
+	return m.Content, true
 }
 
-func (m *Message) ToolCall() (*ToolCall, bool) {
-	if m.Type != MTToolCall {
+func (m *Msg) AsToolCall() (*ToolCall, bool) {
+	if m.Type != MsgTypeToolCall {
 		return nil, false
 	}
-	if m.toolCall == nil {
+	if m.ToolCall == nil {
 		panic("tool call is nil, even though type is MTToolCall")
 	}
-	return m.toolCall, true
+	return m.ToolCall, true
 }
 
-func (m *Message) ToolResult() (*ToolResult, bool) {
-	if m.Type != MTToolResult {
+func (m *Msg) AsToolResult() (*ToolResult, bool) {
+	if m.Type != MsgTypeToolResult {
 		return nil, false
 	}
-	if m.toolResult == nil {
+	if m.ToolResult == nil {
 		panic("tool result is nil, even though type is MTToolResult")
 	}
-	return m.toolResult, true
-}
-
-func (m Message) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-
-	b.WriteString(`{"type":`)
-	fmt.Fprintf(&b, "%d", m.Type)
-	b.WriteByte(',')
-
-	switch m.Type {
-	case MTReasoning:
-		reasoning, err := json.Marshal(m.reasoning)
-		if err != nil {
-			return nil, err
-		}
-		b.WriteString(`"reasoning":`)
-		b.Write(reasoning)
-	case MTContent:
-		content, err := json.Marshal(m.content)
-		if err != nil {
-			return nil, err
-		}
-		b.WriteString(`"content":`)
-		b.Write(content)
-	case MTToolCall:
-		toolCall, err := json.Marshal(m.toolCall)
-		if err != nil {
-			return nil, err
-		}
-		b.WriteString(`"toolCall":`)
-		b.Write(toolCall)
-	case MTToolResult:
-		toolResult, err := json.Marshal(m.toolResult)
-		if err != nil {
-			return nil, err
-		}
-		b.WriteString(`"toolResult":`)
-		b.Write(toolResult)
-	default:
-		panic(fmt.Sprintf("unknown message type: %d", m.Type))
-	}
-
-	b.WriteString(`}`)
-	return b.Bytes(), nil
+	return m.ToolResult, true
 }
 
 type Reasoning struct {
-	Encrypted string
-	Text      string
+	Encrypted string `json:"encrypted"`
+	Text      string `json:"text"`
 }
 
 type Content struct {
-	Role string
-	Text string
+	Role string `json:"role"`
+	Text string `json:"text"`
 }
 
 type ToolCall struct {
-	ID        string
-	Name      string
-	Arguments string
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 type ToolResult struct {
-	ID     string
-	Result string
+	ID     string `json:"id"`
+	Result string `json:"result"`
 }
