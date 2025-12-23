@@ -168,10 +168,12 @@ func (a *Agent) Run(
 		usage.Inc(resp.Usage)
 
 		if toolCallCount == 0 {
+			// We only ever need to loop if the agent is generating tool calls instead of an actual
+			// response. If no tool calls were collected, there's nothing to loop for.
 			break
 		}
 
-		// we need to collect the tool call results
+		// Collect the tool results.
 		for range toolCallCount {
 			select {
 			case <-ctx.Done():
@@ -186,8 +188,24 @@ func (a *Agent) Run(
 		}
 	}
 
-	// before returning, let's update the store
-	err := a.store.Extend(sessionID, msgs[msgsStoreIdx:], usage)
+	// Before returning, we need to update the store so that the conversation history persists
+	// correctly. We need to store every message starting from `msgsStoreIdx` onwards (the previous
+	// ones were already fetched from store, so we don't want duplication).
+	//
+	// There is an important detail here: we'll skip any reasoning messages. This is because while
+	// we /could/ preserve them in the history, both OpenAI and Anthropic will ignore/discard them
+	// from the context /unless/ the reasoning block precedes an ongoing tool call loop. I.e. they
+	// only readd reasoning to the context if (1) the reasoning block precedes a tool call and (2)
+	// no user messages exist after this tool call yet. Since we already carried out the tool call
+	// loop above, there's no reason to ever waste resources storing these reasoning loops.
+	msgsToStore := make([]core.Message, 0, len(msgs)-msgsStoreIdx)
+	for _, msg := range msgs[msgsStoreIdx:] {
+		if msg.Type != core.MTReasoning {
+			msgsToStore = append(msgsToStore, msg)
+		}
+	}
+
+	err := a.store.Extend(sessionID, msgsToStore, usage)
 	if err != nil {
 		return "", fmt.Errorf("Agent.Run: error extending store: %w", err)
 	}
