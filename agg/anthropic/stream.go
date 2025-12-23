@@ -27,7 +27,7 @@ func (m *Model) OpenStream(
 	tools []core.Tool,
 ) (core.ResponseStream, error) {
 	// Anthropic takes the system message separate from the other ones.
-	sysPrompt, msgs := fromCoreMsgs(messages)
+	sysPrompt, msgs := m.fromCoreMsgs(messages)
 
 	payload := requestBody{
 		MaxToks:   m.maxTok,
@@ -170,10 +170,10 @@ func (s *Stream) dispatchRawEvent(
 	case stMsgStart:
 		resp.Model = ev.Message.Model
 	case stMsgDelta:
-		resp.Usage.Input = ev.Usage.Input
-		resp.Usage.Cached = ev.Usage.Cached
-		resp.Usage.Output = ev.Usage.Output
-		resp.Usage.Total = ev.Usage.Input + ev.Usage.Output
+		resp.Usage.Input = ev.Usage.In
+		resp.Usage.Cached = ev.Usage.InCacheRead
+		resp.Usage.Output = ev.Usage.Out
+		resp.Usage.Total = ev.Usage.In + ev.Usage.Out
 		resp.Usage.Cost = costFromUsage(s.modelID, ev.Usage)
 	case stMsgStop:
 		return true, nil
@@ -279,7 +279,7 @@ func sendEvent(ctx context.Context, out chan<- core.Event, ev core.Event) bool {
 // requestBody is the body of the request to the Anthropic messages endpoint
 type requestBody struct {
 	MaxToks   int        `json:"max_tokens"`
-	Msgs      []*msg     `json:"messages"`
+	Msgs      []msg      `json:"messages"`
 	Model     ModelID    `json:"model"`
 	Stream    bool       `json:"stream"`
 	SysPrompt string     `json:"system,omitempty"`
@@ -320,8 +320,8 @@ func newToolCfg(toolChoice string, disableParallel bool) *toolCfg {
 }
 
 type msg struct {
-	Role    string       `json:"role"` // "user" or "assistant"
-	Content []msgContent `json:"content"`
+	Role    string        `json:"role"` // "user" or "assistant"
+	Content []*msgContent `json:"content"`
 }
 
 type msgContent struct {
@@ -339,8 +339,16 @@ type msgContent struct {
 	ToolUseID string `json:"tool_use_id,omitempty"`
 	Output    string `json:"content,omitempty"`
 
+	// this are fields used to indicate caching (cannot be used for Reasoning)
+	CacheCtrl *cacheCtrl `json:"cache_control,omitempty"`
+
 	// this is only used in SSEvents for tool use, not by us
 	PartialArgs string `json:"partial_json,omitempty"`
+}
+
+type cacheCtrl struct {
+	Type string `json:"type"`          // should always be "ephemeral"
+	TTL  string `json:"ttl,omitempty"` // either "5m" or "1h", but cost calculation assumes "5m"
 }
 
 type msgContentType string
@@ -390,11 +398,12 @@ func newMsgToolResult(toolUseID, output string) msgContent {
 	}
 }
 
-func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
-	sysPromptContent := bytes.Buffer{}
+func (m *Model) fromCoreMsgs(msgs []core.Message) (string, []msg) {
+	var sysPrompt string
+
 	// TODO(optimize): len(msgs) is an upper bound, because some messages coalesce we won't reach it
 	//                 specially for cases with a lot of tool use.
-	r := make([]*msg, 0, len(msgs))
+	r := make([]msg, 0, len(msgs))
 
 	// For Anthropic messages, sequential messages from the same role must be added together,
 	// particularly when both reasoning /and/ tool use are happening. So we need to recall if our
@@ -410,11 +419,11 @@ func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 			if lastRole == "assistant" {
 				// let's just append to the contents
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
+				lastMsg.Content = append(lastMsg.Content, &content)
 			} else {
-				r = append(r, &msg{
+				r = append(r, msg{
 					Role:    "assistant",
-					Content: []msgContent{content},
+					Content: []*msgContent{&content},
 				})
 
 				lastRole = "assistant"
@@ -422,7 +431,17 @@ func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 		case core.MTContent:
 			contentCore, _ := m.Content()
 			if contentCore.Role == "system" {
-				sysPromptContent.WriteString(contentCore.Text)
+				if sysPrompt == "" {
+					sysPrompt = contentCore.Text
+				} else {
+					// TODO(robust): don't panic here
+					// For reference, originally sysPrompt would be a buffer and anytime we found
+					// a system message, we would append to the buffer. This has two issues: one,
+					// if the placement of the system messages were important, it'd get mangled as
+					// everything would be part of a single initial system message. Secondly, this
+					// would invalidate all caches.
+					panic("multiple system messages not allowed for anthropic")
+				}
 				continue
 			}
 
@@ -430,11 +449,11 @@ func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 
 			if lastRole == contentCore.Role {
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
+				lastMsg.Content = append(lastMsg.Content, &content)
 			} else {
-				r = append(r, &msg{
+				r = append(r, msg{
 					Role:    contentCore.Role,
-					Content: []msgContent{content},
+					Content: []*msgContent{&content},
 				})
 				lastRole = contentCore.Role
 			}
@@ -444,11 +463,11 @@ func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 
 			if lastRole == "assistant" {
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
+				lastMsg.Content = append(lastMsg.Content, &content)
 			} else {
-				r = append(r, &msg{
+				r = append(r, msg{
 					Role:    "assistant",
-					Content: []msgContent{content},
+					Content: []*msgContent{&content},
 				})
 				lastRole = "assistant"
 			}
@@ -458,11 +477,11 @@ func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 
 			if lastRole == "user" {
 				lastMsg := r[len(r)-1]
-				lastMsg.Content = append(lastMsg.Content, content)
+				lastMsg.Content = append(lastMsg.Content, &content)
 			} else {
-				r = append(r, &msg{
+				r = append(r, msg{
 					Role:    "user",
-					Content: []msgContent{content},
+					Content: []*msgContent{&content},
 				})
 				lastRole = "user"
 			}
@@ -471,7 +490,19 @@ func fromCoreMsgs(msgs []core.Message) (string, []*msg) {
 		}
 	}
 
-	return sysPromptContent.String(), r
+	if m.shouldCache {
+		// Only Reasoning blocks cannot be cached. However, we can safely assume that the last
+		// content block in the history will /not/ be a reasoning block.
+		lastMsg := r[len(r)-1]
+		lastBlock := lastMsg.Content[len(lastMsg.Content)-1]
+		if lastBlock.Type == msgContTypeReason {
+			panic("assumption violated: last content block is a reasoning block")
+		}
+
+		lastBlock.CacheCtrl = &cacheCtrl{Type: "ephemeral"}
+	}
+
+	return sysPrompt, r
 }
 
 type tool struct {
@@ -558,9 +589,10 @@ const (
 )
 
 type usage struct {
-	Input  int64 `json:"input_tokens"`
-	Cached int64 `json:"cache_read_input_tokens"`
-	Output int64 `json:"output_tokens"`
+	In           int64 `json:"input_tokens"`
+	InCacheWrite int64 `json:"cache_creation_input_tokens"`
+	InCacheRead  int64 `json:"cache_read_input_tokens"`
+	Out          int64 `json:"output_tokens"`
 }
 
 func boolPtr(b bool) *bool {

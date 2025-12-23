@@ -35,7 +35,7 @@ func main() {
 	store := agg.NewEphemeralStore()
 
 	// model := openai.NewModel("gpt-5.1", "low")
-	model := anthropic.NewModel(anthropic.Haiku, 2048, 1024)
+	model := anthropic.NewModel(anthropic.Sonnet, 2048, 0, true)
 
 	agent := agg.NewAgent(
 		"You are a helpful assistant.",
@@ -67,6 +67,10 @@ func main() {
 	}
 
 	u := store.Usage("123")
+	printUsage(u)
+}
+
+func printUsage(u core.Usage) {
 	fmt.Printf("\n\033[33;1mUsage:\033[0m\n")
 	fmt.Printf("  \033[33mInput:\033[0m %d\n", u.Input)
 	fmt.Printf("    \033[33mCached:\033[0m %d\n", u.Cached)

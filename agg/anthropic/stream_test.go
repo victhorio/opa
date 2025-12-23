@@ -24,7 +24,7 @@ func TestSimpleMessage(t *testing.T) {
 		core.NewMessageContent("user", "What is the capital of France?"),
 	}
 
-	model := NewModel(Haiku, 2048, 1024)
+	model := NewModel(Haiku, 2048, 1024, false)
 	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
@@ -76,7 +76,7 @@ func TestMultiTurnMessages(t *testing.T) {
 		core.NewMessageContent("user", "Hi! My name is Victhor, what is your name?"),
 	)
 
-	model := NewModel(Haiku, 2048, 1024)
+	model := NewModel(Haiku, 2048, 1024, false)
 	firstStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
@@ -155,7 +155,7 @@ func TestToolCall(t *testing.T) {
 		core.NewMessageContent("user", "What is the weather in Tokyo? In Celsius"),
 	}
 
-	model := NewModel(Haiku, 2048, 1024)
+	model := NewModel(Haiku, 2048, 1024, false)
 	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)

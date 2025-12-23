@@ -1,20 +1,25 @@
 package anthropic
 
-import "log"
+import (
+	"fmt"
+	"log"
+)
 
 // Model holds Anthropic-specific configuration for making API requests.
 type Model struct {
 	model        ModelID
 	maxTok       int
 	maxTokReason int
+	shouldCache  bool
 }
 
 // NewModel creates a new Anthropic Model with the given configuration.
-func NewModel(model ModelID, maxTok int, maxTokReason int) *Model {
+func NewModel(model ModelID, maxTok int, maxTokReason int, shouldCache bool) *Model {
 	return &Model{
 		model:        model,
 		maxTok:       maxTok,
 		maxTokReason: maxTokReason,
+		shouldCache:  shouldCache,
 	}
 }
 
@@ -28,22 +33,30 @@ const (
 
 // no cache because I'm not leveraging it anyway for now
 type modelCost struct {
-	InputTokens  int64
-	OutputTokens int64
+	In           int64
+	InCacheWrite int64
+	InCacheRead  int64
+	Out          int64
 }
 
 var modelCosts = map[ModelID]modelCost{
 	Haiku: {
-		InputTokens:  1000, // $1.000 per 1M
-		OutputTokens: 5000, // $5.000 per 1M
+		In:           1000, // $1.000 per 1M
+		InCacheWrite: 1250, // $1.250 per 1M
+		InCacheRead:  100,  // $0.100 per 1M
+		Out:          5000, // $5.000 per 1M
 	},
 	Sonnet: {
-		InputTokens:  3000,  // $3.000 per 1M
-		OutputTokens: 15000, // $15.000 per 1M
+		In:           3000,  // $3.000 per 1M
+		InCacheWrite: 3750,  // $3.750 per 1M
+		InCacheRead:  300,   // $0.300 per 1M
+		Out:          15000, // $15.000 per 1M
 	},
 	Opus: {
-		InputTokens:  5000,  // $5.000 per 1M
-		OutputTokens: 25000, // $25.000 per 1M
+		In:           5000,  // $5.000 per 1M
+		InCacheWrite: 6250,  // $6.250 per 1M
+		InCacheRead:  500,   // $0.500 per 1M
+		Out:          25000, // $25.000 per 1M
 	},
 }
 
@@ -54,5 +67,10 @@ func costFromUsage(model ModelID, usage usage) int64 {
 		return 0
 	}
 
-	return costs.InputTokens*usage.Input + costs.OutputTokens*usage.Output
+	fmt.Printf("usage: %+v\n", usage)
+
+	return (costs.In*usage.In +
+		costs.InCacheWrite*usage.InCacheWrite +
+		costs.InCacheRead*usage.InCacheRead +
+		costs.Out*usage.Out)
 }
