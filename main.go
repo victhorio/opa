@@ -12,6 +12,7 @@ import (
 	"github.com/victhorio/opa/agg"
 	"github.com/victhorio/opa/agg/core"
 	"github.com/victhorio/opa/agg/openai"
+	"github.com/victhorio/opa/agg/tools"
 )
 
 func main() {
@@ -37,11 +38,16 @@ func main() {
 	model := openai.NewModel(openai.GPT51, "low")
 	// model := anthropic.NewModel(anthropic.Sonnet, 2048, 1024, true)
 
+	webSearchTool, err := tools.CreateAgenticWebSearchTool(http.DefaultClient)
+	if err != nil {
+		log.Fatalf("error creating web search tool: %v", err)
+	}
+
 	agent := agg.NewAgent(
 		"You are a helpful assistant.",
 		model,
 		&store,
-		[]agg.Tool{clickButtonTool},
+		[]agg.Tool{clickButtonTool, webSearchTool},
 	)
 
 	reader := bufio.NewReader(os.Stdin)
