@@ -25,7 +25,7 @@ func TestSimpleMessage(t *testing.T) {
 	}
 
 	model := NewModel(Haiku, 2048, 1024, false)
-	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
+	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{}, core.StreamCfg{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestMultiTurnMessages(t *testing.T) {
 	)
 
 	model := NewModel(Haiku, 2048, 1024, false)
-	firstStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
+	firstStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{}, core.StreamCfg{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestMultiTurnMessages(t *testing.T) {
 	msgs = append(msgs, core.NewMessageContent("user", "Can you repeat my name to me?"))
 
 	ch = make(chan core.Event, 1)
-	secondStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{})
+	secondStream, err := model.OpenStream(ctx, client, msgs, []core.Tool{}, core.StreamCfg{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestToolCall(t *testing.T) {
 	}
 
 	model := NewModel(Haiku, 2048, 1024, false)
-	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool})
+	stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool}, core.StreamCfg{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestToolCall(t *testing.T) {
 	msgs = append(msgs, toolResult)
 
 	ch = make(chan core.Event, 1)
-	stream, err = model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool})
+	stream, err = model.OpenStream(ctx, client, msgs, []core.Tool{getWeatherTool}, core.StreamCfg{})
 	if err != nil {
 		t.Fatalf("NewStream failed: %v", err)
 	}

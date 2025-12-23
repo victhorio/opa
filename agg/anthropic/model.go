@@ -2,6 +2,8 @@ package anthropic
 
 import (
 	"log"
+
+	"github.com/victhorio/opa/agg/core"
 )
 
 // Model holds Anthropic-specific configuration for making API requests.
@@ -20,6 +22,10 @@ func NewModel(model ModelID, maxTok int, maxTokReason int, shouldCache bool) *Mo
 		maxTokReason: maxTokReason,
 		shouldCache:  shouldCache,
 	}
+}
+
+func (m *Model) Provider() core.Provider {
+	return core.ProviderAnthropic
 }
 
 type ModelID string

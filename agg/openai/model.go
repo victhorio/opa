@@ -1,6 +1,10 @@
 package openai
 
-import "log"
+import (
+	"log"
+
+	"github.com/victhorio/opa/agg/core"
+)
 
 // Model holds OpenAI-specific configuration for making API requests.
 type Model struct {
@@ -14,6 +18,10 @@ func NewModel(model ModelID, reasoningEffort string) *Model {
 		model:           model,
 		reasoningEffort: reasoningEffort,
 	}
+}
+
+func (m *Model) Provider() core.Provider {
+	return core.ProviderOpenAI
 }
 
 type ModelID string

@@ -65,11 +65,43 @@ func (a *Agent) Run(
 	var usage core.Usage
 	var out bytes.Buffer
 
-	for range agentRoundsMax {
-		// TODO: if we know it's the last round, disable tools in the OpenAI call
-
+	for round := range agentRoundsMax {
 		if err := ctx.Err(); err != nil {
 			return "", fmt.Errorf("Agent.Run: context error: %w", err)
+		}
+
+		cfg := core.StreamCfg{}
+		if round == agentRoundsMax-1 {
+			// When we're at the last round, we need to behave differently between OpenAI and
+			// Anthropic models due to different behaviors from them.
+			//
+			// **OpenAI**
+			//
+			// If we simply forbit tool choice for the OpenAI model at this point, it will generate
+			// a confused response because it will actually be /completely unaware/ of the available
+			// tools and more importantly, it will not have visibility of the tool calls/results
+			// already made. So it ends up generating a confused message about not being able to
+			// do anything at all, whereas if we got here, it 100% already did quite a bit of calls.
+			//
+			// Thankfully, OpenAI particularly allows system messages in the middle of the
+			// conversation history, so we can just add a system message here indicating that the
+			// harness forbids another tool call without an intermediate user interaction first,
+			// driving it to create a regular message.
+			//
+			// **Anthropic**
+			//
+			// Anthropic models still preserve visibility of their tool calls even if we force it
+			// to not use them, so we can just disable them directly. Unfortunately, Anthropic does
+			// not allow system messages in the middle of the conversation history. This would've
+			// been helpful because currently the model mostly messages something like "Now I'll
+			// make this tool call:" (and actually doesnt't), so the UX is not perfect but fine.
+
+			switch a.model.Provider() {
+			case core.ProviderOpenAI:
+				msgs = append(msgs, core.NewMessageContent("system", toolCallLimitReachedPrompt))
+			case core.ProviderAnthropic:
+				cfg.DisableTools = true
+			}
 		}
 
 		stream, err := a.model.OpenStream(
@@ -77,6 +109,7 @@ func (a *Agent) Run(
 			client,
 			msgs,
 			a.toolSpecs,
+			cfg,
 		)
 		if err != nil {
 			return "", fmt.Errorf("Agent.Run: error opening stream: %w", err)
@@ -164,4 +197,8 @@ func (a *Agent) Run(
 
 const (
 	agentRoundsMax = 4
+
+	toolCallLimitReachedPrompt = `You have reached the maximum number of sequential tool call turns
+without an user interaction. Generate a user message this turn. If you need to make further tool
+calls, just let the user know and once they respond, you can continue making more tool calls.`
 )

@@ -25,6 +25,7 @@ func (m *Model) OpenStream(
 	client *http.Client,
 	messages []core.Message,
 	tools []core.Tool,
+	cfg core.StreamCfg,
 ) (core.ResponseStream, error) {
 	// Anthropic takes the system message separate from the other ones.
 	sysPrompt, msgs := m.fromCoreMsgs(messages)
@@ -43,8 +44,11 @@ func (m *Model) OpenStream(
 	}
 
 	if len(tools) > 0 {
-		// TODO(feat): make this configurable
-		payload.ToolCfg = newToolCfg("auto", false)
+		if cfg.DisableTools {
+			payload.ToolCfg = newToolCfg("none", false)
+		} else {
+			payload.ToolCfg = newToolCfg("auto", false)
+		}
 	}
 
 	body, err := json.Marshal(payload)

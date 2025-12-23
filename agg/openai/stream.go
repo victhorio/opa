@@ -27,6 +27,7 @@ func (m *Model) OpenStream(
 	client *http.Client,
 	messages []core.Message,
 	tools []core.Tool,
+	cfg core.StreamCfg,
 ) (core.ResponseStream, error) {
 	payload := requestBody{
 		Include: []string{"reasoning.encrypted_content"},
@@ -37,10 +38,14 @@ func (m *Model) OpenStream(
 		Tools:   fromCoreTools(tools),
 	}
 
+	if cfg.DisableTools {
+		payload.ToolChoice = "none"
+	}
+
 	if m.reasoningEffort != "" {
 		payload.Reasoning = &reasoningCfg{
 			Effort:  m.reasoningEffort,
-			Summary: "concise",
+			Summary: "auto",
 		}
 	}
 
@@ -174,7 +179,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 				Total:     r.Usage.Input + r.Usage.Output,
 				Cost:      costFromUsage(s.modelID, r.Usage),
 			},
-			Messages: toComMessages(r.Output),
+			Messages: toCoreMessages(r.Output),
 		}
 		if !sendEvent(ctx, out, core.NewEvResp(responsePub)) {
 			return true
@@ -224,7 +229,7 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 	return false
 }
 
-func toComMessages(output []item) []core.Message {
+func toCoreMessages(output []item) []core.Message {
 	messages := make([]core.Message, 0, len(output))
 
 	for _, item := range output {
@@ -267,6 +272,7 @@ type requestBody struct {
 	Store             *bool         `json:"store,omitempty"`
 	Stream            bool          `json:"stream,omitempty"`
 	Temperature       float64       `json:"temperature,omitempty"`
+	ToolChoice        string        `json:"tool_choice,omitempty"`
 	Tools             []tool        `json:"tools,omitempty"`
 }
 
