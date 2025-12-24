@@ -1,9 +1,13 @@
 package obsidian
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -165,6 +169,146 @@ func (v *Vault) ListDir(relPath string) ([]string, error) {
 	}
 
 	return r, nil
+}
+
+// Match represents a ripgrep search result for a single note.
+type Match struct {
+	NoteName     string
+	MatchedLines []string
+}
+
+// RipGrep searches markdown notes under subFolder for pattern using ripgrep.
+// Returns a slice of matches, where each match contains the note name (basename without .md)
+// and the matched lines from that note.
+// subFolder is joined with the vault root; hidden vault internals are excluded.
+func (v *Vault) RipGrep(pattern, subFolder string, caseSensitive bool) ([]Match, error) {
+	if pattern == "" {
+		return nil, fmt.Errorf("pattern cannot be empty")
+	}
+
+	fullPath := filepath.Join(v.rootDir, subFolder)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat search path %s: %w", fullPath, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("search path is not a directory: %s", fullPath)
+	}
+
+	args := []string{
+		"--json",
+		"-g", "*.md",
+		"-g", "!.trash/",
+		"-g", "!.obsidian/",
+	}
+	if caseSensitive {
+		args = append(args, "--case-sensitive")
+	} else {
+		args = append(args, "--ignore-case")
+	}
+	args = append(args, pattern, fullPath)
+
+	cmd := exec.Command("rg", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to pipe ripgrep stdout: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start ripgrep: %w", err)
+	}
+
+	// Build matches directly in a slice, using noteIndex to track where each note is.
+	//
+	// Why we need noteIndex:
+	// Ripgrep is multi-threaded by default, so output from different files can be
+	// interleaved. For example:
+	//   match from note1.md line 5
+	//   match from note2.md line 10
+	//   match from note1.md line 15  <- same note as first match!
+	//
+	// Without noteIndex, we'd create duplicate Match entries for the same note.
+	// The map provides O(1) lookup to find which index in the matches slice
+	// corresponds to each note name, allowing us to append to the correct Match.
+	//
+	// Memory overhead: ~8 bytes per unique matched note (just the integer index).
+	// This is negligible compared to the actual match data (strings).
+	matches := make([]Match, 0)
+	noteIndex := make(map[string]int)
+
+	type rgEvent struct {
+		Type string `json:"type"`
+		Data struct {
+			Path struct {
+				Text string `json:"text"`
+			} `json:"path"`
+			Lines struct {
+				Text string `json:"text"`
+			} `json:"lines"`
+		} `json:"data"`
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	var scanErr error
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var ev rgEvent
+		if err := json.Unmarshal(line, &ev); err != nil {
+			scanErr = fmt.Errorf("failed to decode ripgrep output: %w", err)
+			break
+		}
+
+		if ev.Type != "match" {
+			continue
+		}
+
+		noteName := strings.TrimSuffix(filepath.Base(ev.Data.Path.Text), ".md")
+		matched := strings.TrimSpace(ev.Data.Lines.Text)
+
+		if idx, exists := noteIndex[noteName]; exists {
+			// Note already exists, append to its MatchedLines
+			matches[idx].MatchedLines = append(matches[idx].MatchedLines, matched)
+		} else {
+			// New note, add to slice and record its index
+			noteIndex[noteName] = len(matches)
+			matches = append(matches, Match{
+				NoteName:     noteName,
+				MatchedLines: []string{matched},
+			})
+		}
+	}
+
+	if scanErr == nil {
+		if err := scanner.Err(); err != nil {
+			scanErr = fmt.Errorf("failed to read ripgrep output: %w", err)
+		}
+	}
+
+	// Always wait for the command to finish to avoid zombie processes
+	waitErr := cmd.Wait()
+
+	// Check for scanning errors first
+	if scanErr != nil {
+		return nil, scanErr
+	}
+
+	// Handle command exit status
+	if waitErr != nil {
+		// Exit code 1 means no matches found, which is not an error
+		if exitErr, ok := waitErr.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return []Match{}, nil
+		}
+		return nil, fmt.Errorf("ripgrep failed: %w; stderr: %s", waitErr, stderr.String())
+	}
+
+	return matches, nil
 }
 
 // ReadRecentDailies reads the `n` most recent dailies.

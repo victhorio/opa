@@ -75,3 +75,57 @@ you want to list the contents of a 'folder' at the root, use 'folder'.`,
 
 	return agg.NewTool(wrapper, spec)
 }
+
+func createRipGrepTool(vault *obsidian.Vault) agg.Tool {
+	spec := core.Tool{
+		Name: "RipGrep",
+		Desc: `Use this function to search the vault for a specific regex pattern using ripgrep.
+You will be returned a string with the results of the search, including the names of the files that
+had a match, along with a snippet of the match from the note. Only valid vault notes will be included
+in the search.
+
+Use 'folder' to limit the search to a specific folder. Set it to '.' to search the entire vault.`,
+		Params: map[string]core.ToolParam{
+			"pattern": {
+				Type: core.JSTString,
+				Desc: `The regex pattern used to search the contents of the vault notes.`,
+			},
+			"folder": {
+				Type: core.JSTString,
+				Desc: `The folder to search in. Set it to '.' to search the entire vault.`,
+			},
+			"case_sensitive": {
+				Type: core.JSTBoolean,
+				Desc: `Whether to search in a case-sensitive manner.`,
+			},
+		},
+	}
+
+	wrapper := func(
+		ctx context.Context,
+		args struct {
+			Pattern       string `json:"pattern"`
+			Folder        string `json:"folder"`
+			CaseSensitive bool   `json:"case_sensitive"`
+		},
+	) (string, error) {
+		matches, err := vault.RipGrep(args.Pattern, args.Folder, args.CaseSensitive)
+		if err != nil {
+			return fmt.Sprintf("<error>Failed to search vault for pattern %s: %s</error>", args.Pattern, err.Error()), nil
+		}
+
+		var sb strings.Builder
+
+		for _, match := range matches {
+			sb.WriteString(fmt.Sprintf("NOTE %s\n", match.NoteName))
+			for _, line := range match.MatchedLines {
+				sb.WriteString(fmt.Sprintf("LINE %s\n", line))
+			}
+			sb.WriteString("\n")
+		}
+
+		return sb.String(), nil
+	}
+
+	return agg.NewTool(wrapper, spec)
+}

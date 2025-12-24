@@ -103,8 +103,6 @@ Use when you don't know what exists, or you're trying to orient in the vault.
 
 **RipGrep**
 
-(Currently disabled)
-
 This tool allows you to search for regex patterns within notes from the vault. If you know you only
 need notes from a specific folder, feel free to use the `folder` parameter. 
 
