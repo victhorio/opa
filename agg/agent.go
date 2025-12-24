@@ -10,9 +10,10 @@ import (
 )
 
 type Agent struct {
+	Store Store
+
 	sysPrompt string
 	model     core.Model
-	store     Store
 	tools     ToolRegistry
 	toolSpecs []core.Tool
 }
@@ -26,7 +27,7 @@ func NewAgent(
 	a := Agent{
 		sysPrompt: sysPrompt,
 		model:     model,
-		store:     store,
+		Store:     store,
 		toolSpecs: make([]core.Tool, 0, len(tools)),
 	}
 
@@ -52,7 +53,7 @@ func (a *Agent) Run(
 	ctxChild, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	msgs := a.store.Messages(sessionID)
+	msgs := a.Store.Messages(sessionID)
 	// let's remember up to which idx of `msgs` we already have it stored
 	msgsStoreIdx := len(msgs)
 
@@ -205,7 +206,7 @@ func (a *Agent) Run(
 		}
 	}
 
-	err := a.store.Extend(sessionID, msgsToStore, usage)
+	err := a.Store.Extend(sessionID, msgsToStore, usage)
 	if err != nil {
 		return "", fmt.Errorf("Agent.Run: error extending store: %w", err)
 	}

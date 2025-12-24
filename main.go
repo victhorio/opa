@@ -13,45 +13,57 @@ import (
 	"github.com/victhorio/opa/agg/core"
 	"github.com/victhorio/opa/agg/openai"
 	"github.com/victhorio/opa/agg/tools"
+	"github.com/victhorio/opa/obsidian"
 )
 
 func main() {
-	clickButtonSpec := core.Tool{
-		Name: "clickButton",
-		Desc: "Call this tool when the user asks you to click a button",
-		Params: map[string]core.ToolParam{
-			"index": {
-				Type: core.JSTNumber,
-				Desc: "The index of the button to click (0-based)",
-			},
-		},
+	vault, err := obsidian.LoadVault("~/Documents/Cortex")
+	if err != nil {
+		log.Fatalf("error loading vault: %v", err)
 	}
-	clickButtonFunc := func(ctx context.Context, args struct {
-		Index int `json:"index"`
-	}) (string, error) {
-		return fmt.Sprintf("Clicked button %d", args.Index), nil
+
+	agent := newAgent(vault)
+	repl(&agent)
+
+	u := agent.Store.Usage("123")
+	printUsage(u)
+}
+
+func newAgent(vault *obsidian.Vault) agg.Agent {
+	model := openai.NewModel(openai.GPT5Mini, "minimal")
+	store, err := agg.NewSQLiteStore(":memory:")
+	if err != nil {
+		log.Fatalf("error creating SQLite store: %v", err)
 	}
-	clickButtonTool := agg.NewTool(clickButtonFunc, clickButtonSpec)
-
-	store := agg.NewEphemeralStore()
-
-	model := openai.NewModel(openai.GPT51, "low")
-	// model := anthropic.NewModel(anthropic.Sonnet, 2048, 1024, true)
 
 	webSearchTool, err := tools.CreateAgenticWebSearchTool(http.DefaultClient)
 	if err != nil {
 		log.Fatalf("error creating web search tool: %v", err)
 	}
 
-	agent := agg.NewAgent(
-		"You are a helpful assistant.",
+	dailyNotes, err := vault.ReadRecentDailies(3)
+	if err != nil {
+		log.Fatalf("error reading recent daily notes: %v", err)
+	}
+
+	return agg.NewAgent(
+		fmt.Sprintf(`
+		You are a helpful assistant for a user.
+		
+		These are the most recent daily notes from the user's Obsidian vault:
+		
+		<daily_notes>
+		%s
+		</daily_notes>
+		`, strings.Join(dailyNotes, "\n\n")),
 		model,
-		&store,
-		[]agg.Tool{clickButtonTool, webSearchTool},
+		store,
+		[]agg.Tool{webSearchTool},
 	)
+}
 
+func repl(agent *agg.Agent) {
 	reader := bufio.NewReader(os.Stdin)
-
 	for {
 		fmt.Print("\033[34mYou:\033[0m ")
 		input, err := reader.ReadString('\n')
@@ -72,8 +84,6 @@ func main() {
 		fmt.Printf("\033[32mAssistant:\033[0m\n%s\n", resp)
 	}
 
-	u := store.Usage("123")
-	printUsage(u)
 }
 
 func printUsage(u core.Usage) {
