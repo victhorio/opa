@@ -181,10 +181,6 @@ func (a *Agent) Run(
 				return "", fmt.Errorf("Agent.Run: context error: %w", ctx.Err())
 			case toolResult := <-toolResults:
 				msgs = append(msgs, core.NewMsgToolResult(toolResult.ID, toolResult.Result))
-
-				if includeInternals {
-					fmt.Fprintf(&out, "\n[Tool Result: %s, %s]\n\n", toolResult.ID, toolResult.Result)
-				}
 			}
 		}
 	}

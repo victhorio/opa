@@ -10,6 +10,10 @@ type StreamCfg struct {
 	// DisableTools prevents the model from using tool calls in this stream.
 	// When true, the model will be forced to generate a direct response.
 	DisableTools bool
+
+	// DetailedReasoning configures the model to provide a detailed summary of the reasoning
+	// process instead of the default "concise" one.
+	DetailedReasoning bool
 }
 
 // Model represents an AI model provider that can create response streams.

@@ -52,7 +52,11 @@ func newAgent(vault *obsidian.Vault) agg.Agent {
 		sysPrompt,
 		model,
 		store,
-		[]agg.Tool{webSearchTool},
+		[]agg.Tool{
+			createReadNoteTool(vault),
+			createListDirTool(vault),
+			webSearchTool,
+		},
 	)
 }
 

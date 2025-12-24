@@ -22,6 +22,11 @@ type note struct {
 	relPath string
 }
 
+// LoadVault loads a vault from a given root directory.
+// The root directory is the directory that contains the vault.
+// It will be expanded to the home directory if it has a tilde prefix.
+// It will return an error if the root directory is not a valid directory.
+// It will also return an error if the daily folder is not found.
 func LoadVault(rootDir string) (*Vault, error) {
 	// Expand the rootDir in case it has a tilde prefix.
 	rootDir, err := expandHomeDir(rootDir)
@@ -57,6 +62,12 @@ func LoadVault(rootDir string) (*Vault, error) {
 	return v, nil
 }
 
+// RefreshIndex refreshes the index of the vault.
+// It walks through every dir/subdir in the vault, to save all notes into the index.
+// It also spots the daily folder, which is used to read the most recent dailies.
+// It skips all subdirectories that start with a ".".
+//
+// Returns an error if the daily folder is not found.
 func (v *Vault) RefreshIndex() error {
 	// Let's walk through every dir/subdir in the vault, to save all notes into the index.
 
@@ -109,6 +120,10 @@ func (v *Vault) RefreshIndex() error {
 	return filepath.WalkDir(v.rootDir, handler)
 }
 
+// ReadNote reads the contents of a note from the vault.
+// The name of the note is "pure", without directories and without exensions.
+// E.g.: to read a note in `<rooDir>/dailies/2025-10-11.md`, the name is `2025-10-11` only.
+// Returns the contents of the note wrapped in a `<note>` tag, with the note name and content.
 func (v *Vault) ReadNote(name string) (string, error) {
 	note, ok := v.idx.notes[name]
 	if !ok {
@@ -121,6 +136,35 @@ func (v *Vault) ReadNote(name string) (string, error) {
 	}
 
 	return fmt.Sprintf("<note>\n<note_name>%s</note_name>\n\n<content>%s</content></note>", name, content), nil
+}
+
+// ListDir lists the items for a given relative directory in the vault.
+// E.g.: "." will list the root directory of the vault.
+//
+// The items are sorted by filename. Items that start with a `.` are omitted.
+// Directories will have a `/` suffix whereas regular files will not.
+// Returns them as a list of strings.
+func (v *Vault) ListDir(relPath string) ([]string, error) {
+	dir, err := os.ReadDir(filepath.Join(v.rootDir, relPath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory %s: %w", relPath, err)
+	}
+
+	r := make([]string, 0, len(dir))
+	for _, d := range dir {
+		name := d.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		if d.IsDir() {
+			r = append(r, fmt.Sprintf("%s/", d.Name()))
+		} else {
+			r = append(r, d.Name())
+		}
+	}
+
+	return r, nil
 }
 
 // ReadRecentDailies reads the `n` most recent dailies.

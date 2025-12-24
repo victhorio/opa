@@ -45,7 +45,11 @@ func (m *Model) OpenStream(
 	if m.reasoningEffort != "" {
 		payload.Reasoning = &reasoningCfg{
 			Effort:  m.reasoningEffort,
-			Summary: "auto",
+			Summary: "concise",
+		}
+
+		if cfg.DetailedReasoning {
+			payload.Reasoning.Summary = "detailed"
 		}
 	}
 
