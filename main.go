@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/victhorio/opa/agg"
 	"github.com/victhorio/opa/agg/core"
 	"github.com/victhorio/opa/agg/openai"
 	"github.com/victhorio/opa/agg/tools"
 	"github.com/victhorio/opa/obsidian"
+	"github.com/victhorio/opa/prompts"
 )
 
 func main() {
@@ -41,21 +43,13 @@ func newAgent(vault *obsidian.Vault) agg.Agent {
 		log.Fatalf("error creating web search tool: %v", err)
 	}
 
-	dailyNotes, err := vault.ReadRecentDailies(3)
+	sysPrompt, err := loadSysPrompt(vault)
 	if err != nil {
-		log.Fatalf("error reading recent daily notes: %v", err)
+		log.Fatalf("error loading system prompt: %v", err)
 	}
 
 	return agg.NewAgent(
-		fmt.Sprintf(`
-		You are a helpful assistant for a user.
-		
-		These are the most recent daily notes from the user's Obsidian vault:
-		
-		<daily_notes>
-		%s
-		</daily_notes>
-		`, strings.Join(dailyNotes, "\n\n")),
+		sysPrompt,
 		model,
 		store,
 		[]agg.Tool{webSearchTool},
@@ -83,7 +77,27 @@ func repl(agent *agg.Agent) {
 
 		fmt.Printf("\033[32mAssistant:\033[0m\n%s\n", resp)
 	}
+}
 
+func loadSysPrompt(vault *obsidian.Vault) (string, error) {
+	recentDailies, err := vault.ReadRecentDailies(3)
+	if err != nil {
+		return "", fmt.Errorf("error reading recent daily notes: %w", err)
+	}
+
+	agentsMD, err := vault.ReadNote("AGENTS")
+	if err != nil {
+		return "", fmt.Errorf("error reading agents note: %w", err)
+	}
+
+	r := strings.NewReplacer(
+		"{name}", "Victhor",
+		"{now}", time.Now().Format("2006-01-02 15:04:05"),
+		"{agents_md}", agentsMD,
+		"{recent_dailies}", strings.Join(recentDailies, "\n\n"),
+	)
+
+	return r.Replace(prompts.OpaSysPrompt), nil
 }
 
 func printUsage(u core.Usage) {
