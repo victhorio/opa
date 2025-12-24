@@ -1,4 +1,4 @@
-This file was last updated 2025-12-23.
+This file was last updated 2025-12-24.
 
 This file provides guidance to AI agents about universal aspects of this repository.
 
@@ -37,6 +37,7 @@ The goals are:
 - `agg/core/response.go` - Defines a common "Response" and "Usage" types for generation results.
 - `agg/core/event.go` - Event types for streaming (deltas, tool calls, errors).
 - `agg/core/tools.go` - Common tool specification and JSON Schema types.
+- `agg/core/embeddings.go` - Embedder interface and EmbeddingsResult type for generating embeddings.
 - `agg/core/dump.go` - Error logging utility.
 
 - `agg/openai/` - Implements Model and ResponseStream interfaces for the OpenAI responses API.
@@ -47,5 +48,18 @@ The goals are:
 - `agg/anthropic/stream.go` - Anthropic provider implementation.
 - `agg/anthropic/model.go` - Anthropic model configuration and pricing.
 
+- `agg/embeddings/` - Embeddings provider implementations.
+- `agg/embeddings/openai.go` - OpenAI embeddings API client implementation.
+
 - `agg/tools/` - Built-in useful tools.
 - `agg/tools/perplexity.go` - Perplexity AI web search tools.
+
+- `obsidian/` - Obsidian vault integration and management.
+- `obsidian/vault.go` - Vault loading, indexing, note reading, directory listing, and ripgrep search.
+- `obsidian/embeddings.go` - Semantic search functionality using embeddings for vault notes.
+
+- `prompts/` - System prompts and prompt management.
+- `prompts/prompts.go` - Embeds system prompt files for use in the application.
+- `prompts/opa.txt` - Main system prompt for the opa assistant.
+
+- `tools.go` - Tool wrappers for vault operations (ReadNote, ListDir, RipGrep, SemanticSearch).
