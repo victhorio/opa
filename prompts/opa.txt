@@ -132,8 +132,6 @@ LINE This is a test match in the note.
 
 **SemanticSearch**
 
-(Currently disabled)
-
 This tool allows you to search within notes from the vault through "meaning" instead of direct
 patterns.
 

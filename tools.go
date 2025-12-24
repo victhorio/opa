@@ -129,3 +129,44 @@ Use 'folder' to limit the search to a specific folder. Set it to '.' to search t
 
 	return agg.NewTool(wrapper, spec)
 }
+
+func createSemanticSearchTool(vault *obsidian.Vault) agg.Tool {
+	spec := core.Tool{
+		Name: "SemanticSearch",
+		Desc: `Use this function to search for note names in the vault using semantic search. The function
+will return the top K note names whose content is the most similar to the "query text".`,
+		Params: map[string]core.ToolParam{
+			"query_text": {
+				Type: core.JSTString,
+				Desc: `The text to search for in the vault. Usually a very brief natural sounding sentence that describes the type of content you're looking for.`,
+			},
+			"k": {
+				Type: core.JSTNumber,
+				Desc: `The number of note names to return.`,
+			},
+		},
+	}
+
+	wrapper := func(
+		ctx context.Context,
+		args struct {
+			QueryText string `json:"query_text"`
+			K         int    `json:"k"`
+		},
+	) (string, error) {
+		matches, err := vault.SemanticSearch(args.QueryText, args.K)
+		if err != nil {
+			return fmt.Sprintf("<error>Failed to perform semantic search for query '%s': %s</error>", args.QueryText, err.Error()), nil
+		}
+
+		var sb strings.Builder
+
+		for i, match := range matches {
+			sb.WriteString(fmt.Sprintf("%d. %s (score: %.4f)\n", i+1, match.Name, match.Score))
+		}
+
+		return sb.String(), nil
+	}
+
+	return agg.NewTool(wrapper, spec)
+}

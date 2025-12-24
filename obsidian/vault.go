@@ -15,11 +15,19 @@ import (
 type Vault struct {
 	rootDir string
 	idx     *vaultIdx
+	cfg     Cfg
+}
+
+type Cfg struct {
+	ComputeEmbeddings bool
 }
 
 type vaultIdx struct {
 	notes    map[string]note
 	dailyDir string
+
+	// Only used if cfg.computeEmbeddings is set in the vault.
+	embeds *embedIdx
 }
 
 type note struct {
@@ -31,7 +39,7 @@ type note struct {
 // It will be expanded to the home directory if it has a tilde prefix.
 // It will return an error if the root directory is not a valid directory.
 // It will also return an error if the daily folder is not found.
-func LoadVault(rootDir string) (*Vault, error) {
+func LoadVault(rootDir string, cfg Cfg) (*Vault, error) {
 	// Expand the rootDir in case it has a tilde prefix.
 	rootDir, err := expandHomeDir(rootDir)
 	if err != nil {
@@ -53,6 +61,7 @@ func LoadVault(rootDir string) (*Vault, error) {
 			notes:    make(map[string]note),
 			dailyDir: "",
 		},
+		cfg: cfg,
 	}
 
 	if err := v.RefreshIndex(); err != nil {
@@ -121,7 +130,17 @@ func (v *Vault) RefreshIndex() error {
 		return nil
 	}
 
-	return filepath.WalkDir(v.rootDir, handler)
+	if err := filepath.WalkDir(v.rootDir, handler); err != nil {
+		return fmt.Errorf("failed to walk the vault: %w", err)
+	}
+
+	if v.cfg.ComputeEmbeddings {
+		if err := v.RefreshEmbeddings(); err != nil {
+			return fmt.Errorf("failed to refresh embeddings: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // ReadNote reads the contents of a note from the vault.

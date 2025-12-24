@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	vault, err := obsidian.LoadVault("~/Documents/Cortex")
+	vault, err := obsidian.LoadVault("~/Documents/Cortex", obsidian.Cfg{ComputeEmbeddings: true})
 	if err != nil {
 		log.Fatalf("error loading vault: %v", err)
 	}
@@ -56,6 +56,7 @@ func newAgent(vault *obsidian.Vault) agg.Agent {
 			createReadNoteTool(vault),
 			createListDirTool(vault),
 			createRipGrepTool(vault),
+			createSemanticSearchTool(vault),
 			webSearchTool,
 		},
 	)
