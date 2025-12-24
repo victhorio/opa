@@ -1,4 +1,4 @@
-This file was last updated 2025-12-20.
+This file was last updated 2025-12-23.
 
 This file provides guidance to AI agents about universal aspects of this repository.
 
@@ -22,16 +22,30 @@ The goals are:
 
 ## Architecture
 
-- `./*.go` - Currently a simple CLI demo with interactive REPL.
-- `agg/*.go` - Defines a Store interface for conversation history, Tool abstractions for runtime
-  tool calls, and the Agent struct which orchestrates agentic behavior. The Agent is provider-
-  agnostic and depends on the `core.Model` interface rather than any specific provider.
-- `agg/core/*.go` - Defines shared types and interfaces used across modules:
-  - `Model` and `ResponseStream` interfaces for provider abstraction
-  - Message types (text, tool calls, tool results, reasoning)
-  - Event types for streaming responses
-  - Tool JSON Schema definitions, Usage types, etc.
-- `agg/openai/*.go` - Implements the OpenAI provider via the responses endpoint. `NewModel()`
-  returns a `core.Model` implementation. Main file is `stream.go`.
-- `agg/anthropic/*.go` - Implements the Anthropic provider via the messages endpoint. `NewModel()`
-  returns a `core.Model` implementation. Main file is `stream.go`.
+- `main.go` - CLI demo with interactive REPL showing how to use the framework.
+
+- `agg/` - The "AI framework" library.
+- `agg/agent.go` - Most important file in `agg/`. Agent struct and Run() method orchestrating the agentic loop.
+- `agg/store.go` - Store interface for conversation history.
+- `agg/store_sqlite.go` - SQLite Store implementation.
+- `agg/store_ephemeral.go` - In-memory Store implementation.
+- `agg/tools.go` - Implements handlers that wrap callables and associate them with a tool specification, so agents can call it.
+
+- `agg/core/` - Defines common types and interfaces.
+- `agg/core/model.go` - Defines a Model and ResponseStream interfaces, allowing for abstracting providers.
+- `agg/core/message.go` - Defines the different types of messages (e.g. text, reasoning, tool calls).
+- `agg/core/response.go` - Defines a common "Response" and "Usage" types for generation results.
+- `agg/core/event.go` - Event types for streaming (deltas, tool calls, errors).
+- `agg/core/tools.go` - Common tool specification and JSON Schema types.
+- `agg/core/dump.go` - Error logging utility.
+
+- `agg/openai/` - Implements Model and ResponseStream interfaces for the OpenAI responses API.
+- `agg/openai/stream.go` - OpenAI provider implementation.
+- `agg/openai/model.go` - OpenAI model configuration and pricing.
+
+- `agg/anthropic/` - Implements Model and ResponseStream interfaces for the Anthropic messages API.
+- `agg/anthropic/stream.go` - Anthropic provider implementation.
+- `agg/anthropic/model.go` - Anthropic model configuration and pricing.
+
+- `agg/tools/` - Built-in useful tools.
+- `agg/tools/perplexity.go` - Perplexity AI web search tools.
