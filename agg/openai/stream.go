@@ -172,7 +172,9 @@ func (s *Stream) dispatchRawEvent(ctx context.Context, dataBytes []byte, out cha
 		responsePub := core.Response{
 			Model: r.Model,
 			Usage: core.Usage{
-				Input:     r.Usage.Input,
+				// OpenAI reports all Input Tokens as "Input" and a subset of it that was cached as
+				// "Cached".
+				Input:     r.Usage.Input - r.Usage.InputDetails.Cached,
 				Cached:    r.Usage.InputDetails.Cached,
 				Output:    r.Usage.Output,
 				Reasoning: r.Usage.OutputDetails.Reasoning,

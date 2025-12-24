@@ -37,7 +37,7 @@ type Msg struct {
 	//    invalidated.
 	// 2. If the Msg is going to be used by a model from a different provider, the CachedTransform
 	//    needs to be manually invalidated.
-	CachedTransform json.RawMessage
+	CachedTransform json.RawMessage `json:"-"`
 }
 
 func NewMsgReasoning(encrypted, text string) *Msg {
