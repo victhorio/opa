@@ -194,6 +194,16 @@ func TestOpenAIEmbeddings_Embed(t *testing.T) {
 func TestOpenAIEmbeddings_CostCalculation(t *testing.T) {
 	t.Parallel()
 
+	// Cost calculation uses the pattern: cost = tokens * cost_per_token
+	// Where cost_per_token is stored in billionths of a dollar per token.
+	//
+	// OpenAI pricing:
+	//   - text-embedding-3-small: $0.020 per 1M tokens → 20 billionths/token
+	//   - text-embedding-3-large: $0.130 per 1M tokens → 130 billionths/token
+	//
+	// The unit for cost results is billionths of a dollar, matching the convention
+	// used in agg/openai and agg/anthropic packages.
+
 	tests := []struct {
 		name           string
 		modelID        EmbeddingModelID
@@ -205,25 +215,25 @@ func TestOpenAIEmbeddings_CostCalculation(t *testing.T) {
 			name:         "small model 1000 tokens",
 			modelID:      OpenAISmall,
 			tokens:       1000,
-			expectedCost: 20000,
+			expectedCost: 20_000, // 1000 tokens * 20 billionths/token = $0.00002
 		},
 		{
 			name:         "small model 1M tokens",
 			modelID:      OpenAISmall,
 			tokens:       1_000_000,
-			expectedCost: 20000000,
+			expectedCost: 20_000_000, // 1M tokens * 20 billionths/token = $0.020
 		},
 		{
 			name:         "large model 1000 tokens",
 			modelID:      OpenAILarge,
 			tokens:       1000,
-			expectedCost: 13000000,
+			expectedCost: 130_000, // 1000 tokens * 130 billionths/token = $0.00013
 		},
 		{
 			name:         "large model 1M tokens",
 			modelID:      OpenAILarge,
 			tokens:       1_000_000,
-			expectedCost: 1300000000,
+			expectedCost: 130_000_000, // 1M tokens * 130 billionths/token = $0.130
 		},
 	}
 

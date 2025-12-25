@@ -161,9 +161,17 @@ func (e *OpenAIEmbeddings) calculateCost(tokens int64) int64 {
 	return tokens * costPerToken
 }
 
-// embeddingModelCosts stores the cost per 1M tokens for each model.
+// embeddingModelCosts stores the cost per token for each model.
 // Values are in the same units as used in agg/openai and agg/anthropic packages:
-// thousandths of a dollar per 1M tokens.
+// billionths of a dollar per token.
+//
+// To derive these values from published pricing (in dollars per 1M tokens):
+//   cost_per_token = (price_per_1M_tokens / 1_000_000) * 1_000_000_000
+//   cost_per_token = price_per_1M_tokens * 1000
+//
+// Examples:
+//   $0.020 per 1M tokens → 0.020 * 1000 = 20 billionths/token
+//   $0.130 per 1M tokens → 0.130 * 1000 = 130 billionths/token
 var embeddingModelCosts = map[EmbeddingModelID]int64{
 	OpenAISmall: 20,  // $0.020 per 1M tokens
 	OpenAILarge: 130, // $0.130 per 1M tokens
