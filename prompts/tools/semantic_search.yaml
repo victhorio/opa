@@ -1,0 +1,13 @@
+name: SemanticSearch
+description: |
+  Use this function to search for note names in the vault using semantic search. The function
+  will return the top K note names whose content is the most similar to the "query text".
+params:
+  query_text:
+    type: string
+    description: |
+      The text to search for in the vault. Usually a very brief natural sounding sentence that describes the type of content you're looking for.
+  k:
+    type: number
+    description: |
+      The number of note names to return.

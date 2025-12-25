@@ -13,21 +13,16 @@ import (
 	"github.com/victhorio/opa/prompts"
 )
 
-func createReadNoteTool(vault *obsidian.Vault) agg.Tool {
-	spec := core.Tool{
-		Name: "ReadNote",
-		Desc: `Use this function to read a note from the vault. If the note exists, it will be
-returned wrapped in XML tags <note> and </note>. If the underlying function fails, it will instead
-return an error message wrapped in XML tags <error> and </error>.`,
-		Params: map[string]core.ToolParam{
-			"note_name": {
-				Type: core.JSTString,
-				Desc: `The name of the note to read, written in the same way as notes are referenced
-in the vault. For example, to read the ./AGENTS.md file, use note_name='AGENTS'; to read the note in
-'./0 Daily/2025-10-11.md', use note_name='2025-10-11'.`,
-			},
-		},
+func loadToolSpec(name string) core.Tool {
+	spec, err := prompts.LoadToolSpec(name)
+	if err != nil {
+		panic(err)
 	}
+	return spec
+}
+
+func createReadNoteTool(vault *obsidian.Vault) agg.Tool {
+	spec := loadToolSpec("read_note")
 
 	wrapper := func(
 		ctx context.Context,
@@ -52,28 +47,7 @@ func createSmartReadNoteTool(vault *obsidian.Vault, client *http.Client) agg.Too
 	}
 
 	model := openai.NewModel(openai.GPT5Mini, "low")
-
-	spec := core.Tool{
-		Name: "SmartReadNote",
-		Desc: `Use this function to have a separate LLM read a note from the vault and return
-relevant content to you based on the 'prompt' you provide. The idea is that you won't need to
-overload your context with a lot of potentially irrelevant content if you only need something
-specific about a given note.`,
-		Params: map[string]core.ToolParam{
-			"note_name": {
-				Type: core.JSTString,
-				Desc: `The name of the note to read, written in the same way as notes are referenced
-in the vault. For example, to read the ./AGENTS.md file, use note_name='AGENTS'; to read the note in
-'./0 Daily/2025-10-11.md', use note_name='2025-10-11'.`,
-			},
-			"prompt": {
-				Type: core.JSTString,
-				Desc: `The prompt passed to the LLM that will read the note. This prompt indicates
-what it should return to you. For example, 'Does this note mention X?' or 'Does the note contain
-benchmark results for Y? If so, output them.'`,
-			},
-		},
-	}
+	spec := loadToolSpec("smart_read_note")
 
 	wrapper := func(
 		ctx context.Context,
@@ -128,20 +102,7 @@ benchmark results for Y? If so, output them.'`,
 }
 
 func createListDirTool(vault *obsidian.Vault) agg.Tool {
-	spec := core.Tool{
-		Name: "ListDir",
-		Desc: `Use this function to list the contents of a directory in the vault. You will be
-returned a string with the contents of the directory, each separated by a newline. Directories will
-have a '/' suffix, whereas regular files will not.`,
-		Params: map[string]core.ToolParam{
-			"sub_path": {
-				Type: core.JSTString,
-				Desc: `The path of the directory to list, considering that the vault path will
-already be prepended. For example, if you want to list the contents of the root, use '.', and if
-you want to list the contents of a 'folder' at the root, use 'folder'.`,
-			},
-		},
-	}
+	spec := loadToolSpec("list_dir")
 
 	wrapper := func(
 		ctx context.Context,
@@ -161,29 +122,7 @@ you want to list the contents of a 'folder' at the root, use 'folder'.`,
 }
 
 func createRipGrepTool(vault *obsidian.Vault) agg.Tool {
-	spec := core.Tool{
-		Name: "RipGrep",
-		Desc: `Use this function to search the vault for a specific regex pattern using ripgrep.
-You will be returned a string with the results of the search, including the names of the files that
-had a match, along with a snippet of the match from the note. Only valid vault notes will be included
-in the search.
-
-Use 'folder' to limit the search to a specific folder. Set it to '.' to search the entire vault.`,
-		Params: map[string]core.ToolParam{
-			"pattern": {
-				Type: core.JSTString,
-				Desc: `The regex pattern used to search the contents of the vault notes.`,
-			},
-			"folder": {
-				Type: core.JSTString,
-				Desc: `The folder to search in. Set it to '.' to search the entire vault.`,
-			},
-			"case_sensitive": {
-				Type: core.JSTBoolean,
-				Desc: `Whether to search in a case-sensitive manner.`,
-			},
-		},
-	}
+	spec := loadToolSpec("rip_grep")
 
 	wrapper := func(
 		ctx context.Context,
@@ -215,21 +154,7 @@ Use 'folder' to limit the search to a specific folder. Set it to '.' to search t
 }
 
 func createSemanticSearchTool(vault *obsidian.Vault) agg.Tool {
-	spec := core.Tool{
-		Name: "SemanticSearch",
-		Desc: `Use this function to search for note names in the vault using semantic search. The function
-will return the top K note names whose content is the most similar to the "query text".`,
-		Params: map[string]core.ToolParam{
-			"query_text": {
-				Type: core.JSTString,
-				Desc: `The text to search for in the vault. Usually a very brief natural sounding sentence that describes the type of content you're looking for.`,
-			},
-			"k": {
-				Type: core.JSTNumber,
-				Desc: `The number of note names to return.`,
-			},
-		},
-	}
+	spec := loadToolSpec("semantic_search")
 
 	wrapper := func(
 		ctx context.Context,

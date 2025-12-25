@@ -1,9 +1,9 @@
 package core
 
 type Tool struct {
-	Name   string
-	Desc   string
-	Params map[string]ToolParam
+	Name   string               `json:"name"`
+	Desc   string               `json:"description"`
+	Params map[string]ToolParam `json:"params"`
 }
 
 type ToolParam struct {

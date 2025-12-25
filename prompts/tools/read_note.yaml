@@ -1,0 +1,12 @@
+name: ReadNote
+description: |
+  Use this function to read a note from the vault. If the note exists, it will be
+  returned wrapped in XML tags <note> and </note>. If the underlying function fails, it will instead
+  return an error message wrapped in XML tags <error> and </error>.
+params:
+  note_name:
+    type: string
+    description: |
+      The name of the note to read, written in the same way as notes are referenced
+      in the vault. For example, to read the ./AGENTS.md file, use note_name='AGENTS'; to read the note in
+      './0 Daily/2025-10-11.md', use note_name='2025-10-11'.

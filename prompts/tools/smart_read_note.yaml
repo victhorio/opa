@@ -1,0 +1,19 @@
+name: SmartReadNote
+description: |
+  Use this function to have a separate LLM read a note from the vault and return
+  relevant content to you based on the 'prompt' you provide. The idea is that you won't need to
+  overload your context with a lot of potentially irrelevant content if you only need something
+  specific about a given note.
+params:
+  note_name:
+    type: string
+    description: |
+      The name of the note to read, written in the same way as notes are referenced
+      in the vault. For example, to read the ./AGENTS.md file, use note_name='AGENTS'; to read the note in
+      './0 Daily/2025-10-11.md', use note_name='2025-10-11'.
+  prompt:
+    type: string
+    description: |
+      The prompt passed to the LLM that will read the note. This prompt indicates
+      what it should return to you. For example, 'Does this note mention X?' or 'Does the note contain
+      benchmark results for Y? If so, output them.'

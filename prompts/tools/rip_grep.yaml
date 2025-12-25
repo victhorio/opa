@@ -1,0 +1,21 @@
+name: RipGrep
+description: |
+  Use this function to search the vault for a specific regex pattern using ripgrep.
+  You will be returned a string with the results of the search, including the names of the files that
+  had a match, along with a snippet of the match from the note. Only valid vault notes will be included
+  in the search.
+
+  Use 'folder' to limit the search to a specific folder. Set it to '.' to search the entire vault.
+params:
+  pattern:
+    type: string
+    description: |
+      The regex pattern used to search the contents of the vault notes.
+  folder:
+    type: string
+    description: |
+      The folder to search in. Set it to '.' to search the entire vault.
+  case_sensitive:
+    type: boolean
+    description: |
+      Whether to search in a case-sensitive manner.

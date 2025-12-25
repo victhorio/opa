@@ -1,0 +1,12 @@
+name: ListDir
+description: |
+  Use this function to list the contents of a directory in the vault. You will be
+  returned a string with the contents of the directory, each separated by a newline. Directories will
+  have a '/' suffix, whereas regular files will not.
+params:
+  sub_path:
+    type: string
+    description: |
+      The path of the directory to list, considering that the vault path will
+      already be prepended. For example, if you want to list the contents of the root, use '.', and if
+      you want to list the contents of a 'folder' at the root, use 'folder'.

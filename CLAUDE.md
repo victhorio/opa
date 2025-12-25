@@ -1,4 +1,4 @@
-This file was last updated 2025-12-24.
+This file was last updated 2025-12-25.
 
 This file provides guidance to AI agents about universal aspects of this repository.
 
@@ -59,7 +59,9 @@ The goals are:
 - `obsidian/embeddings.go` - Semantic search functionality using embeddings for vault notes.
 
 - `prompts/` - System prompts and prompt management.
-- `prompts/prompts.go` - Embeds system prompt files for use in the application.
+- `prompts/prompts.go` - Embeds system prompt files and tool specifications. Provides LoadToolSpec() function to load tool specs from YAML.
 - `prompts/opa.txt` - Main system prompt for the opa assistant.
+- `prompts/smart_read_note.txt` - System prompt for the SmartReadNote tool's LLM.
+- `prompts/tools/` - YAML specifications for vault operation tools (read_note, smart_read_note, list_dir, rip_grep, semantic_search).
 
-- `tools.go` - Tool wrappers for vault operations (ReadNote, ListDir, RipGrep, SemanticSearch).
+- `tools.go` - Tool wrappers for vault operations (ReadNote, SmartReadNote, ListDir, RipGrep, SemanticSearch). Uses loadToolSpec() helper to load YAML specs from prompts/tools/.
