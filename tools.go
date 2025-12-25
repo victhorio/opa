@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/victhorio/opa/agg"
 	"github.com/victhorio/opa/agg/core"
+	"github.com/victhorio/opa/agg/openai"
 	"github.com/victhorio/opa/obsidian"
+	"github.com/victhorio/opa/prompts"
 )
 
 func createReadNoteTool(vault *obsidian.Vault) agg.Tool {
@@ -38,6 +41,87 @@ in the vault. For example, to read the ./AGENTS.md file, use note_name='AGENTS';
 		}
 
 		return note, nil
+	}
+
+	return agg.NewTool(wrapper, spec)
+}
+
+func createSmartReadNoteTool(vault *obsidian.Vault, client *http.Client) agg.Tool {
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	model := openai.NewModel(openai.GPT5Mini, "low")
+
+	spec := core.Tool{
+		Name: "SmartReadNote",
+		Desc: `Use this function to have a separate LLM read a note from the vault and return
+relevant content to you based on the 'prompt' you provide. The idea is that you won't need to
+overload your context with a lot of potentially irrelevant content if you only need something
+specific about a given note.`,
+		Params: map[string]core.ToolParam{
+			"note_name": {
+				Type: core.JSTString,
+				Desc: `The name of the note to read, written in the same way as notes are referenced
+in the vault. For example, to read the ./AGENTS.md file, use note_name='AGENTS'; to read the note in
+'./0 Daily/2025-10-11.md', use note_name='2025-10-11'.`,
+			},
+			"prompt": {
+				Type: core.JSTString,
+				Desc: `The prompt passed to the LLM that will read the note. This prompt indicates
+what it should return to you. For example, 'Does this note mention X?' or 'Does the note contain
+benchmark results for Y? If so, output them.'`,
+			},
+		},
+	}
+
+	wrapper := func(
+		ctx context.Context,
+		args struct {
+			NoteName string `json:"note_name"`
+			Prompt   string `json:"prompt"`
+		},
+	) (string, error) {
+		note, err := vault.ReadNote(args.NoteName)
+		if err != nil {
+			return fmt.Sprintf("<error>Failed to read note %s: %s</error>", args.NoteName, err.Error()), nil
+		}
+
+		sysPrompt := strings.NewReplacer("{note}", note).Replace(prompts.SmartReadNotePrompt)
+		msgs := []*core.Msg{
+			core.NewMsgContent("system", sysPrompt),
+			core.NewMsgContent("user", args.Prompt),
+		}
+
+		stream, err := model.OpenStream(ctx, client, msgs, []core.Tool{}, core.StreamCfg{})
+		if err != nil {
+			return fmt.Sprintf("<error>Failed to send message to LLM: %s</error>", err.Error()), nil
+		}
+
+		ch := make(chan core.Event, 1)
+		go stream.Consume(ctx, ch)
+
+		var resp *core.Response
+		for event := range ch {
+			switch event.Type {
+			case core.EvResp:
+				resp = &event.Response
+			case core.EvError:
+				return fmt.Sprintf("<error>Failed to read message from LLM: %s</error>", event.Err.Error()), nil
+			}
+		}
+
+		if resp == nil {
+			return "", fmt.Errorf("left channel without receiving a response, something went wrong")
+		}
+
+		msg := resp.Messages[len(resp.Messages)-1]
+		content, ok := msg.AsContent()
+		if !ok {
+			return "", fmt.Errorf("expected content message, got %d", msg.Type)
+		}
+
+		return content.Text, nil
 	}
 
 	return agg.NewTool(wrapper, spec)

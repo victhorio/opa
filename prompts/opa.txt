@@ -67,8 +67,6 @@ ask the user for help narrowing down if necessary.
 
 **SmartReadNote**
 
-(Currently disabled)
-
 This tool uses a separate lightweight LLM to read a note and extract only the content relevant to
 your query. This helps avoid overloading your context with potentially irrelevant information from
 large notes.

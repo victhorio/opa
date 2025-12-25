@@ -54,6 +54,7 @@ func newAgent(vault *obsidian.Vault) agg.Agent {
 		store,
 		[]agg.Tool{
 			createReadNoteTool(vault),
+			createSmartReadNoteTool(vault, nil),
 			createListDirTool(vault),
 			createRipGrepTool(vault),
 			createSemanticSearchTool(vault),
