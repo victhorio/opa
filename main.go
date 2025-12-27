@@ -33,7 +33,7 @@ func main() {
 }
 
 func newAgent(vault *obsidian.Vault) agg.Agent {
-	model := openai.NewModel(openai.GPT5Mini, "minimal")
+	model := openai.NewModel(openai.GPT51, "low")
 	store, err := agg.NewSQLiteStore(":memory:")
 	if err != nil {
 		log.Fatalf("error creating SQLite store: %v", err)
