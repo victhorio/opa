@@ -50,8 +50,28 @@ func (a *Agent) Run(
 	input string,
 	includeInternals bool,
 ) (string, error) {
+	return a.RunStream(ctx, client, sessionID, input, includeInternals, nil)
+}
+
+// RunStream behaves like Run but emits every streaming event through the provided callback.
+// The callback is invoked synchronously; callers should return quickly to avoid blocking the
+// streaming loop.
+func (a *Agent) RunStream(
+	ctx context.Context,
+	client *http.Client,
+	sessionID string,
+	input string,
+	includeInternals bool,
+	onEvent func(core.Event),
+) (string, error) {
 	ctxChild, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	emit := func(event core.Event) {
+		if onEvent != nil {
+			onEvent(event)
+		}
+	}
 
 	msgs := a.Store.Messages(sessionID)
 	// let's remember up to which idx of `msgs` we already have it stored
@@ -123,6 +143,7 @@ func (a *Agent) Run(
 		var toolCallCount int
 		toolResults := make(chan core.ToolResult, 4)
 		for event := range events {
+			emit(event)
 			switch event.Type {
 			case core.EvToolCall:
 				// let's immediately start running the tool call

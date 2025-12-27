@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -18,6 +15,8 @@ import (
 	"github.com/victhorio/opa/prompts"
 )
 
+const sessionID = "tui-session"
+
 func main() {
 	vault, err := obsidian.LoadVault("~/Documents/Cortex", obsidian.Cfg{ComputeEmbeddings: true})
 	if err != nil {
@@ -25,9 +24,11 @@ func main() {
 	}
 
 	agent := newAgent(vault)
-	repl(&agent)
+	if err := runTUI(agent, sessionID); err != nil {
+		log.Fatalf("error running TUI: %v", err)
+	}
 
-	u := agent.Store.Usage("123")
+	u := agent.Store.Usage(sessionID)
 	printUsage(u)
 }
 
@@ -61,29 +62,6 @@ func newAgent(vault *obsidian.Vault) agg.Agent {
 			webSearchTool,
 		},
 	)
-}
-
-func repl(agent *agg.Agent) {
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("\033[34mYou:\033[0m ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			log.Fatalf("failed to read input: %v", err)
-		}
-		input = strings.TrimSpace(input)
-
-		if input == ":q" {
-			break
-		}
-
-		resp, err := agent.Run(context.Background(), &http.Client{}, "123", input, true)
-		if err != nil {
-			log.Fatalf("error running agent: %v", err)
-		}
-
-		fmt.Printf("\033[32mAssistant:\033[0m\n%s\n", resp)
-	}
 }
 
 func loadSysPrompt(vault *obsidian.Vault) (string, error) {
