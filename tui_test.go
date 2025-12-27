@@ -180,9 +180,10 @@ func TestRenderMessage(t *testing.T) {
 		{"reasoning message", chatMessage{kind: msgReasoning, text: "thinking..."}, "thinking..."},
 	}
 
+	m := testModel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderMessage(tt.msg)
+			result := m.renderMessage(tt.msg)
 			if result == "" {
 				t.Error("renderMessage should not return empty string")
 			}

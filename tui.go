@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/reflow/wordwrap"
 	"github.com/victhorio/opa/agg"
@@ -92,6 +93,9 @@ type TUIModel struct {
 	renderedHistory string
 	cachedMsgCount  int
 	cachedWidth     int
+
+	// mdRenderer renders markdown for assistant messages. Recreated when width changes.
+	mdRenderer *glamour.TermRenderer
 
 	width  int
 	height int
@@ -385,8 +389,8 @@ func (m *TUIModel) updateViewport() {
 	// Compose: cached history + live partial (only partial needs work per delta)
 	content := m.renderedHistory
 	if m.partialResponse != "" {
-		partial := fmt.Sprintf("%s: %s",
-			labelBotStyle.Render("Assistant"),
+		partial := fmt.Sprintf("%s\n%s",
+			labelBotStyle.Render("Assistant:"),
 			assistantBodyStyle.Render(m.partialResponse))
 		if m.cachedWidth > 0 {
 			partial = wrapContent(partial, m.cachedWidth)
@@ -406,12 +410,24 @@ func (m *TUIModel) updateViewport() {
 
 // rebuildHistoryCache renders all finalized messages with wrapping and stores the result.
 func (m *TUIModel) rebuildHistoryCache() {
+	// Recreate markdown renderer if width changed
+	if m.modelChatHistory.Width != m.cachedWidth && m.modelChatHistory.Width > 0 {
+		r, err := glamour.NewTermRenderer(
+			glamour.WithStylePath("dark"),
+			glamour.WithWordWrap(m.modelChatHistory.Width),
+		)
+		if err == nil {
+			m.mdRenderer = r
+		}
+	}
+
 	var b strings.Builder
 	for _, msg := range m.messages {
-		b.WriteString(renderMessage(msg))
+		b.WriteString(m.renderMessage(msg))
 		b.WriteString("\n\n")
 	}
 	content := strings.TrimRight(b.String(), "\n")
+	// Only wrap non-assistant messages; assistant messages are already wrapped by glamour
 	if m.modelChatHistory.Width > 0 {
 		content = wrapContent(content, m.modelChatHistory.Width)
 	}
@@ -436,23 +452,40 @@ func renderDivider(width int) string {
 }
 
 // renderMessage renders a single chat message with appropriate styling.
-func renderMessage(msg chatMessage) string {
-	var label, body string
+// For assistant messages, uses glamour to render markdown if available.
+func (m *TUIModel) renderMessage(msg chatMessage) string {
+	var label, body, sep string
 	switch msg.kind {
 	case msgUser:
 		label = labelUserStyle.Render("You")
 		body = msg.text
+		sep = " "
 	case msgAssistant:
-		label = labelBotStyle.Render("Assistant")
-		body = assistantBodyStyle.Render(msg.text)
+		label = labelBotStyle.Render("Assistant:")
+		sep = "\n"
+		if m.mdRenderer != nil {
+			rendered, err := m.mdRenderer.Render(msg.text)
+			if err == nil {
+				body = strings.TrimSpace(rendered)
+			} else {
+				body = assistantBodyStyle.Render(msg.text)
+			}
+		} else {
+			body = assistantBodyStyle.Render(msg.text)
+		}
 	case msgTool:
 		label = labelToolStyle.Render("Tool")
 		body = bodyToolStyle.Render(msg.text)
+		sep = " "
 	case msgReasoning:
 		label = labelReasonStyle.Render("Reasoning")
 		body = bodyReasonStyle.Render(msg.text)
+		sep = " "
 	}
-	return fmt.Sprintf("%s: %s", label, body)
+	if sep == " " {
+		return fmt.Sprintf("%s:%s%s", label, sep, body)
+	}
+	return fmt.Sprintf("%s%s%s", label, sep, body)
 }
 
 func maybeTruncate(s string, max int) string {
