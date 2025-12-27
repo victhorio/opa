@@ -3,9 +3,12 @@ package obsidian
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +34,8 @@ type vaultIdx struct {
 }
 
 type note struct {
-	relPath string
+	relPath     string
+	contentHash string // SHA-256 hex digest of note content
 }
 
 // LoadVault loads a vault from a given root directory.
@@ -122,8 +126,18 @@ func (v *Vault) RefreshIndex() error {
 				panic(fmt.Errorf("there are multiple notes with the same name: %s", noteName))
 			}
 
+			// Compute content hash for change detection (used by embeddings cache).
+			content, err := os.ReadFile(path)
+			if err != nil {
+				log.Printf("warning: failed to read note %s for hashing: %v", noteName, err)
+				return nil
+			}
+			hash := sha256.Sum256(content)
+			contentHash := hex.EncodeToString(hash[:])
+
 			v.idx.notes[noteName] = note{
-				relPath: relPath,
+				relPath:     relPath,
+				contentHash: contentHash,
 			}
 		}
 
