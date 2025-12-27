@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,13 +20,20 @@ import (
 const sessionID = "tui-session"
 
 func main() {
-	vault, err := obsidian.LoadVault("~/Documents/Cortex", obsidian.Cfg{ComputeEmbeddings: true})
+	if err := setupLogging(); err != nil {
+		log.Fatalf("error setting up logging: %v", err)
+	}
+
+	vault, err := obsidian.LoadVault("~/Documents/Cortex", obsidian.Cfg{ComputeEmbeddings: false})
 	if err != nil {
 		log.Fatalf("error loading vault: %v", err)
 	}
 
+	// Start embeddings refresh in background so TUI opens immediately.
+	embeddingsDone := vault.RefreshEmbeddingsAsync()
+
 	agent := newAgent(vault)
-	if err := runTUI(agent, sessionID); err != nil {
+	if err := runTUI(agent, sessionID, embeddingsDone); err != nil {
 		log.Fatalf("error running TUI: %v", err)
 	}
 
@@ -91,4 +100,29 @@ func printUsage(u core.Usage) {
 	fmt.Printf("    \033[33mCached:\033[0m %d\n", u.Cached)
 	fmt.Printf("  \033[33mOutput:\033[0m %d\n", u.Output)
 	fmt.Printf("  \033[33;1mCost:\033[0m $%.3f\n", float64(u.Cost)/1_000_000_000)
+}
+
+// setupLogging redirects log output to ~/.opa/opa.log so it doesn't interfere with the TUI.
+func setupLogging() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	opaDir := filepath.Join(home, ".opa")
+	if err := os.MkdirAll(opaDir, 0755); err != nil {
+		return fmt.Errorf("failed to create ~/.opa directory: %w", err)
+	}
+
+	logPath := filepath.Join(opaDir, "opa.log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	log.SetOutput(logFile)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	log.Println("--- opa started ---")
+
+	return nil
 }

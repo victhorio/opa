@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -51,12 +52,13 @@ type chatMessage struct {
 
 // Bubble Tea messages for streaming events. These are sent from the goroutine in startStream
 // to the main Update loop via the streamCh channel.
-type botDeltaMsg struct{ text string }   // incremental text from the assistant
-type botDoneMsg struct{ text string }    // final complete response
-type botErrorMsg struct{ err error }     // error during streaming
-type streamClosedMsg struct{}            // channel was closed
-type toolCallMsg struct{ text string }   // tool call (complete, not streamed)
-type reasoningMsg struct{ text string }  // reasoning block (complete, not streamed)
+type botDeltaMsg struct{ text string }      // incremental text from the assistant
+type botDoneMsg struct{ text string }       // final complete response
+type botErrorMsg struct{ err error }        // error during streaming
+type streamClosedMsg struct{}               // channel was closed
+type toolCallMsg struct{ text string }      // tool call (complete, not streamed)
+type reasoningMsg struct{ text string }     // reasoning block (complete, not streamed)
+type embeddingsReadyMsg struct{ err error } // embeddings computation completed
 
 // TUIModel is the Bubble Tea model for the chat interface. It manages both the UI state
 // (viewport, textarea, dimensions) and the streaming state (channel, cancel func).
@@ -99,9 +101,14 @@ type TUIModel struct {
 
 	width  int
 	height int
+
+	// embeddingsReady is true once embeddings have finished loading.
+	// embeddingsDone is the channel that signals completion.
+	embeddingsReady bool
+	embeddingsDone  <-chan error
 }
 
-func newTUIModel(agent agg.Agent, sessionID string) TUIModel {
+func newTUIModel(agent agg.Agent, sessionID string, embeddingsDone <-chan error) TUIModel {
 	ta := textarea.New()
 	ta.Placeholder = "Ask opa..."
 	ta.Focus()
@@ -121,17 +128,33 @@ func newTUIModel(agent agg.Agent, sessionID string) TUIModel {
 		modelChatHistory: vp,
 		messages:         []chatMessage{},
 		stickToBottom:    true,
+		embeddingsReady:  embeddingsDone == nil, // true if no channel (embeddings disabled)
+		embeddingsDone:   embeddingsDone,
 	}
 }
 
-func runTUI(agent agg.Agent, sessionID string) error {
-	p := tea.NewProgram(newTUIModel(agent, sessionID), tea.WithAltScreen())
+func runTUI(agent agg.Agent, sessionID string, embeddingsDone <-chan error) error {
+	p := tea.NewProgram(newTUIModel(agent, sessionID, embeddingsDone), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
 
+// waitForEmbeddings returns a tea.Cmd that blocks until embeddings are ready.
+func (m TUIModel) waitForEmbeddings() tea.Cmd {
+	if m.embeddingsDone == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		err := <-m.embeddingsDone
+		return embeddingsReadyMsg{err: err}
+	}
+}
+
 func (m TUIModel) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(
+		textarea.Blink,
+		m.waitForEmbeddings(),
+	)
 }
 
 func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -166,6 +189,13 @@ func (m TUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamClosedMsg:
 		m.stopStream()
 		return m, nil
+	case embeddingsReadyMsg:
+		m.embeddingsReady = true
+		m.embeddingsDone = nil
+		if msg.err != nil {
+			log.Printf("warning: embeddings failed: %v", msg.err)
+		}
+		return m, nil
 	case toolCallMsg:
 		m.messages = append(m.messages, chatMessage{kind: msgTool, text: msg.text})
 		m.updateViewport()
@@ -199,6 +229,9 @@ func (m TUIModel) View() string {
 	b.WriteString("\n")
 
 	hint := "Enter to send • Alt+Enter for newline • :q to quit • Ctrl+C"
+	if !m.embeddingsReady {
+		hint = "Loading embeddings... " + hint
+	}
 	if m.generating {
 		hint = "Assistant is responding..."
 	}
@@ -251,6 +284,10 @@ func (m TUIModel) updateKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m TUIModel) submitInput() (tea.Model, tea.Cmd) {
 	if m.generating {
 		// We're in the middle of a generation. For now, just ignore and make it a no op.
+		return m, nil
+	}
+	if !m.embeddingsReady {
+		// Block submit while embeddings are still loading.
 		return m, nil
 	}
 

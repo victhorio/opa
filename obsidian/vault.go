@@ -148,13 +148,28 @@ func (v *Vault) RefreshIndex() error {
 		return fmt.Errorf("failed to walk the vault: %w", err)
 	}
 
-	if v.cfg.ComputeEmbeddings {
-		if err := v.RefreshEmbeddings(); err != nil {
-			return fmt.Errorf("failed to refresh embeddings: %w", err)
-		}
-	}
-
 	return nil
+}
+
+// RefreshEmbeddingsAsync starts embeddings refresh in background.
+// Returns a channel that receives nil on success or an error.
+// The channel is closed after sending.
+func (v *Vault) RefreshEmbeddingsAsync() <-chan error {
+	done := make(chan error, 1)
+	go func() {
+		defer close(done)
+		if err := v.RefreshEmbeddings(); err != nil {
+			done <- err
+			return
+		}
+		done <- nil
+	}()
+	return done
+}
+
+// EmbeddingsReady returns true if embeddings are available for semantic search.
+func (v *Vault) EmbeddingsReady() bool {
+	return v.idx.embeds != nil
 }
 
 // ReadNote reads the contents of a note from the vault.

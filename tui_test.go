@@ -9,7 +9,7 @@ import (
 )
 
 func testModel() TUIModel {
-	m := newTUIModel(agg.Agent{}, "test")
+	m := newTUIModel(agg.Agent{}, "test", nil) // nil = embeddings already ready
 	m.width, m.height = 80, 24
 	m.syncSizes()
 	return m

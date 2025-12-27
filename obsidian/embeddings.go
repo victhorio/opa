@@ -18,9 +18,9 @@ import (
 // simple in-memory, in-Go computation which works well enough for a relatively small sized vault.
 
 const (
-	opaDirName       = ".opa"
-	cacheFileName    = "embeddings.gob"
-	cacheVersion     = "1"
+	opaDirName         = ".opa"
+	cacheFileName      = "embeddings.gob"
+	cacheVersion       = "1"
 	embeddingBatchSize = 100
 )
 
@@ -117,8 +117,7 @@ func (v *Vault) saveEmbeddingsCache(cache *embeddingsCache) error {
 func (v *Vault) RefreshEmbeddings() error {
 	// TODO(correctness): accept a context here
 
-	// TODO: change this to OpenAILarge, it's cheap enough - no reason not to
-	embedder, err := embeddings.NewOpenAIEmbedder(embeddings.OpenAISmall, nil)
+	embedder, err := embeddings.NewOpenAIEmbedder(embeddings.OpenAILarge, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create embedder: %w", err)
 	}
