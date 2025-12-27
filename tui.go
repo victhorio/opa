@@ -87,6 +87,12 @@ type TUIModel struct {
 	// on every update. Set to false when user manually scrolls up.
 	stickToBottom bool
 
+	// renderedHistory caches the wrapped, rendered finalized messages. Rebuilt only when
+	// messages are added (cachedMsgCount changes) or viewport width changes (cachedWidth).
+	renderedHistory string
+	cachedMsgCount  int
+	cachedWidth     int
+
 	width  int
 	height int
 }
@@ -262,20 +268,21 @@ func (m TUIModel) submitInput() (tea.Model, tea.Cmd) {
 	m.syncInputHeight()
 	m.updateViewport()
 
-	return m, m.startStream(input)
-}
-
-// startStream initiates an async streaming request to the agent. It spawns a goroutine that
-// calls agent.RunStream and translates core.Event into tea.Msg, sending them through a channel.
-// Returns a tea.Cmd that will wait for the first event from the stream.
-//
-// The streaming goroutine is cancelled via cancelCurrStream when stopStream is called.
-func (m *TUIModel) startStream(input string) tea.Cmd {
+	// Set up streaming state explicitly here rather than inside the spawning function.
+	// This makes the data flow clearer: submitInput owns all state changes.
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelCurrStream = cancel
+	m.streamCh = m.runStreamingRequest(ctx, input)
+	m.stickToBottom = true
 
-	// Use a buffered channel so that we avoid blocking HTTP events in case we have a hiccup on
-	// the TUI side (e.g., slow rendering).
+	return m, m.waitForStream()
+}
+
+// runStreamingRequest spawns a goroutine that calls agent.RunStream and translates core.Event
+// into tea.Msg, sending them through the returned channel. Does not modify TUIModel state.
+// The goroutine exits when ctx is cancelled or the stream completes.
+func (m TUIModel) runStreamingRequest(ctx context.Context, input string) <-chan tea.Msg {
+	// Buffered to avoid blocking HTTP events during TUI rendering hiccups.
 	events := make(chan tea.Msg, 16)
 	go func() {
 		defer close(events)
@@ -315,9 +322,7 @@ func (m *TUIModel) startStream(input string) tea.Cmd {
 		}
 	}()
 
-	m.streamCh = events
-	m.stickToBottom = true
-	return m.waitForStream()
+	return events
 }
 
 // waitForStream returns a tea.Cmd that blocks until the next message arrives on streamCh.
@@ -366,45 +371,53 @@ func (m *TUIModel) syncInputHeight() {
 	}
 }
 
-// updateViewport rebuilds the entire chat history content and updates the viewport.
-//
-// TODO(perf): This rebuilds the entire chat history string on every call, which happens on every
-//             streaming delta. For long conversations this becomes O(messages × deltas). Consider
-//             caching the rendered history and only appending new content, or only rebuilding
-//             when the messages slice actually changes.
+// updateViewport composes the chat history content and updates the viewport. Uses cached
+// rendered history for finalized messages, only rebuilding when messages or width change.
+// During streaming, only the partial response is re-rendered per delta.
 func (m *TUIModel) updateViewport() {
-	var b strings.Builder
+	cacheValid := len(m.messages) == m.cachedMsgCount &&
+		m.modelChatHistory.Width == m.cachedWidth
 
-	for _, msg := range m.messages {
-		var label string
-		body := msg.text
-		switch msg.kind {
-		case msgUser:
-			label = labelUserStyle.Render("You")
-		case msgAssistant:
-			label = labelBotStyle.Render("Assistant")
-		case msgTool:
-			label = labelToolStyle.Render("Tool")
-			body = bodyToolStyle.Render(body)
-		case msgReasoning:
-			label = labelReasonStyle.Render("Reasoning")
-			body = bodyReasonStyle.Render(body)
-		}
-		fmt.Fprintf(&b, "%s: %s\n\n", label, body)
+	if !cacheValid {
+		m.rebuildHistoryCache()
 	}
 
+	// Compose: cached history + live partial (only partial needs work per delta)
+	content := m.renderedHistory
 	if m.partialResponse != "" {
-		fmt.Fprintf(&b, "%s: %s", labelBotStyle.Render("Assistant"), assistantBodyStyle.Render(m.partialResponse))
+		partial := fmt.Sprintf("%s: %s",
+			labelBotStyle.Render("Assistant"),
+			assistantBodyStyle.Render(m.partialResponse))
+		if m.cachedWidth > 0 {
+			partial = wrapContent(partial, m.cachedWidth)
+		}
+		if content != "" {
+			content += "\n\n" + partial
+		} else {
+			content = partial
+		}
 	}
 
-	content := strings.TrimRight(b.String(), "\n")
-	if m.modelChatHistory.Width > 0 {
-		content = wrapContent(content, m.modelChatHistory.Width)
-	}
 	m.modelChatHistory.SetContent(content)
 	if m.stickToBottom {
 		m.modelChatHistory.GotoBottom()
 	}
+}
+
+// rebuildHistoryCache renders all finalized messages with wrapping and stores the result.
+func (m *TUIModel) rebuildHistoryCache() {
+	var b strings.Builder
+	for _, msg := range m.messages {
+		b.WriteString(renderMessage(msg))
+		b.WriteString("\n\n")
+	}
+	content := strings.TrimRight(b.String(), "\n")
+	if m.modelChatHistory.Width > 0 {
+		content = wrapContent(content, m.modelChatHistory.Width)
+	}
+	m.renderedHistory = content
+	m.cachedMsgCount = len(m.messages)
+	m.cachedWidth = m.modelChatHistory.Width
 }
 
 func clamp(v, min, max int) int {
@@ -420,6 +433,26 @@ func clamp(v, min, max int) int {
 func renderDivider(width int) string {
 	w := max(width, 10)
 	return dividerStyle.Render(strings.Repeat("─", w))
+}
+
+// renderMessage renders a single chat message with appropriate styling.
+func renderMessage(msg chatMessage) string {
+	var label, body string
+	switch msg.kind {
+	case msgUser:
+		label = labelUserStyle.Render("You")
+		body = msg.text
+	case msgAssistant:
+		label = labelBotStyle.Render("Assistant")
+		body = assistantBodyStyle.Render(msg.text)
+	case msgTool:
+		label = labelToolStyle.Render("Tool")
+		body = bodyToolStyle.Render(msg.text)
+	case msgReasoning:
+		label = labelReasonStyle.Render("Reasoning")
+		body = bodyReasonStyle.Render(msg.text)
+	}
+	return fmt.Sprintf("%s: %s", label, body)
 }
 
 func maybeTruncate(s string, max int) string {

@@ -22,7 +22,8 @@ The goals are:
 
 ## Architecture
 
-- `main.go` - CLI demo with interactive REPL showing how to use the framework.
+- `main.go` - Entry point. Loads the Obsidian vault, creates the agent with tools, and runs the TUI.
+- `tui.go` - Bubble Tea TUI for the chat interface. Handles streaming display, input, and viewport management with cached rendering for performance.
 
 - `agg/` - The "AI framework" library.
 - `agg/agent.go` - Most important file in `agg/`. Agent struct and Run() method orchestrating the agentic loop.
