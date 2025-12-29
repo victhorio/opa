@@ -74,9 +74,21 @@ func newAgent(vault *obsidian.Vault) agg.Agent {
 }
 
 func loadSysPrompt(vault *obsidian.Vault) (string, error) {
-	recentDailies, err := vault.ReadRecentDailies(3)
+	recentDailies, err := vault.ReadRecentDailies(2)
 	if err != nil {
 		return "", fmt.Errorf("error reading recent daily notes: %w", err)
+	}
+
+	recentWeeklies, err := vault.ReadRecentWeeklies(1)
+	if err != nil && err != os.ErrNotExist {
+		return "", fmt.Errorf("error reading recent weekly notes: %w", err)
+	}
+
+	var recentWeekly string
+	if len(recentWeeklies) > 0 {
+		recentWeekly = recentWeeklies[0]
+	} else {
+		recentWeekly = "[No weekly notes found for this vault]"
 	}
 
 	agentsMD, err := vault.ReadNote("AGENTS")
@@ -89,6 +101,7 @@ func loadSysPrompt(vault *obsidian.Vault) (string, error) {
 		"{now}", time.Now().Format("2006-01-02 15:04:05"),
 		"{agents_md}", agentsMD,
 		"{recent_dailies}", strings.Join(recentDailies, "\n\n"),
+		"{recent_weekly}", recentWeekly,
 	)
 
 	return r.Replace(prompts.OpaSysPrompt), nil

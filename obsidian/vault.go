@@ -26,8 +26,9 @@ type Cfg struct {
 }
 
 type vaultIdx struct {
-	notes    map[string]note
-	dailyDir string
+	notes     map[string]note
+	dailyDir  string
+	weeklyDir string
 
 	// Only used if cfg.computeEmbeddings is set in the vault.
 	embeds *embedIdx
@@ -76,6 +77,8 @@ func LoadVault(rootDir string, cfg Cfg) (*Vault, error) {
 		return nil, fmt.Errorf("daily folder not found in vault")
 	}
 
+	// NOTE: We're okay with the weeklyDir not being found.
+
 	return v, nil
 }
 
@@ -104,6 +107,10 @@ func (v *Vault) RefreshIndex() error {
 			// Let's also try and spot the daily folder.
 			if v.idx.dailyDir == "" && strings.Contains(strings.ToLower(d.Name()), "daily") {
 				v.idx.dailyDir = path
+			}
+			// Let's do the same to try and get the weekly folder
+			if v.idx.weeklyDir == "" && strings.Contains(strings.ToLower(d.Name()), "weekly") {
+				v.idx.weeklyDir = path
 			}
 
 			return nil
@@ -360,7 +367,7 @@ func (v *Vault) RipGrep(pattern, subFolder string, caseSensitive bool) ([]Match,
 }
 
 // ReadRecentDailies reads the `n` most recent dailies.
-// The dailies are sorted by the last modified time, and the most recent is the first.
+// The dailies are sorted by descending filenames, with the most recent dates first.
 // The contents of the returned slice are defined by ReadNote.
 func (v *Vault) ReadRecentDailies(n int) ([]string, error) {
 	files, err := os.ReadDir(v.idx.dailyDir)
@@ -376,6 +383,47 @@ func (v *Vault) ReadRecentDailies(n int) ([]string, error) {
 	for i := len(files) - 1; i >= 0; i-- {
 		name := files[i].Name()
 		// TODO(feature): let's be smart and skip potential random files here like "template.md"
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+
+		noteName := strings.TrimSuffix(name, ".md")
+
+		content, err := v.ReadNote(noteName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read note %s: %w", noteName, err)
+		}
+		r = append(r, content)
+
+		if len(r) >= n {
+			break
+		}
+	}
+
+	return r, nil
+}
+
+// ReadRecentWeeklies reads the `n` most recent weeklies.
+// The weeklies are sorted by descinding filename, with the most recent weeklies first.
+// The contents of the returned slice are defined by ReadNote.
+// If no weekly directory is available, returns a nil slice.
+func (v *Vault) ReadRecentWeeklies(n int) ([]string, error) {
+	if v.idx.weeklyDir == "" {
+		return nil, nil
+	}
+
+	files, err := os.ReadDir(v.idx.weeklyDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read weekly directory: %w", err)
+	}
+
+	r := make([]string, 0, n)
+
+	// We know that os.ReadDir returns all the directory entries /sorted/ by filename. Since weekly
+	// notes contain only the date in their name, we can search for the most recent notes simply by
+	// traversing the result of os.ReadDir backwards.
+	for i := len(files) - 1; i >= 0; i-- {
+		name := files[i].Name()
 		if !strings.HasSuffix(name, ".md") {
 			continue
 		}

@@ -205,6 +205,12 @@ most relevant notes.
 {recent_dailies}
 </recent_dailies>
 
+Below is the content of the most recent weekly note.
+
+<recent_weekly>
+{recent_weekly}
+</recent_weekly>
+
 ## Priorities
 
 - Prefer **correctness over brevity**. If you must choose, add 1-2 lines rather than leave out crucial information.
