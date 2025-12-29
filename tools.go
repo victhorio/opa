@@ -140,14 +140,19 @@ func createRipGrepTool(vault *obsidian.Vault) agg.Tool {
 		var sb strings.Builder
 
 		for _, match := range matches {
-			sb.WriteString(fmt.Sprintf("NOTE %s\n", match.NoteName))
+			fmt.Fprintf(&sb, "NOTE %s\n", match.NoteName)
 			for _, line := range match.MatchedLines {
-				sb.WriteString(fmt.Sprintf("LINE %s\n", line))
+				fmt.Fprintf(&sb, "LINE %s\n", line)
 			}
 			sb.WriteString("\n")
 		}
 
-		return sb.String(), nil
+		ret := sb.String()
+		if ret == "" {
+			return "<error>No matches found</error>", nil
+		}
+
+		return ret, nil
 	}
 
 	return agg.NewTool(wrapper, spec)
